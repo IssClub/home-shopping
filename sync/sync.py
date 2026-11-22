@@ -1,14 +1,40 @@
 #!/usr/bin/env python3
-"""Nightly / on-demand price sync: Israeli price-transparency files -> Firestore.
+"""Nightly / on-demand price sync: Israeli price-transparency files -> Supabase.
 
 MODE=check    : run only if the app asked for a refresh (config/sync.requestedAt > lastRun)
 MODE=nightly  : always run
-Env: FIREBASE_SERVICE_ACCOUNT = service-account JSON (GitHub secret)
+Env (GitHub secrets): SUPABASE_URL, SUPABASE_SERVICE_KEY (service_role / sb_secret_ key)
+Data: table public.docs (col, id, data jsonb) - see supabase/schema.sql
 """
-import os,re,sys,json,datetime,statistics
-import firebase_admin
-from firebase_admin import credentials,firestore
+import os,re,sys,json,datetime,statistics,urllib.request,urllib.parse
 from pp import Client,ET,retry
+
+SB_URL=os.environ.get('SUPABASE_URL','').strip().rstrip('/')
+SB_KEY=os.environ.get('SUPABASE_SERVICE_KEY','').strip()
+def sb(method,path,body=None,prefer=None,rng=None):
+    h={'apikey':SB_KEY,'Content-Type':'application/json','Accept':'application/json'}
+    if SB_KEY.startswith('eyJ'): h['Authorization']='Bearer '+SB_KEY   # legacy JWT keys; new sb_secret_ keys go in apikey only
+    if prefer: h['Prefer']=prefer
+    if rng: h['Range']=rng
+    data=json.dumps(body,ensure_ascii=False).encode('utf-8') if body is not None else None
+    req=urllib.request.Request(f'{SB_URL}/rest/v1/{path}',data=data,headers=h,method=method)
+    def go():
+        with urllib.request.urlopen(req,timeout=60) as r:
+            t=r.read(); return json.loads(t) if t else None
+    return retry(go,3)
+q=lambda s:urllib.parse.quote(str(s),safe='')
+def get_doc(col,id):
+    r=sb('GET',f'docs?select=data&col=eq.{q(col)}&id=eq.{q(id)}'); return r[0]['data'] if r else None
+def list_col(col):
+    out={}; size=1000; start=0
+    while True:
+        r=sb('GET',f'docs?select=id,data&col=eq.{q(col)}&order=id',rng=f'{start}-{start+size-1}') or []
+        for x in r: out[x['id']]=x['data']
+        if len(r)<size: return out
+        start+=size
+def put_doc(col,id,data):
+    sb('POST','docs?on_conflict=col,id',[{'col':col,'id':id,'data':data,'updated_at':now()}],
+       prefer='resolution=merge-duplicates,return=minimal')
 
 DEFAULT_SRC={'s1':{'user':'osherad','chain':'7290103152017','store':'032'},
              's2':{'user':'yohananof','chain':'7290803800003','store':'073'}}
@@ -97,15 +123,13 @@ def match(name,cats):
 
 def main():
     mode=os.environ.get('MODE','nightly')
-    if not os.environ.get('FIREBASE_SERVICE_ACCOUNT','').strip():
-        print('FIREBASE_SERVICE_ACCOUNT not set yet - skipping (Firebase not configured)'); return
-    cred=credentials.Certificate(json.loads(os.environ['FIREBASE_SERVICE_ACCOUNT']))
-    firebase_admin.initialize_app(cred); db=firestore.client()
-    sref=db.document('config/sync'); sdoc=sref.get(); sync=sdoc.to_dict() if sdoc.exists else {}
+    if not SB_URL or not SB_KEY:
+        print('SUPABASE_URL / SUPABASE_SERVICE_KEY not set yet - skipping (Supabase not configured)'); return
+    sync=get_doc('config','sync') or {}
     if mode=='check':
         req=sync.get('requestedAt'); last=sync.get('lastRun') or ''
         if not req or req<=last: print('no request'); return
-    st=db.document('config/stores').get(); stores=(st.to_dict() or {}).get('list',[]) if st.exists else []
+    stores=(get_doc('config','stores') or {}).get('list',[])
     srcs={s['id']:s.get('src') or DEFAULT_SRC.get(s['id']) for s in stores if s.get('auto',True)} if stores else dict(DEFAULT_SRC)
     srcs={k:v for k,v in srcs.items() if v}
     report={}; cats={}
@@ -114,9 +138,10 @@ def main():
         except Exception as e: report[sid]={'error':str(e)[:200]}
     updated=0
     if cats:
-        for d in db.collection('items').stream():
-            it=d.to_dict(); iid=d.id
-            pd=db.document(f'prices/{iid}').get(); pr=pd.to_dict() if pd.exists else {'name':it.get('name',''),'p':{}}
+        all_prices=list_col('prices')
+        for iid,it in list_col('items').items():
+            it=it or {}
+            pr=all_prices.get(iid) or {'name':it.get('name',''),'p':{}}
             p=dict(pr.get('p',{})); changed=False
             guess=None
             for sid,(cat,promos) in cats.items():
@@ -129,9 +154,10 @@ def main():
                 x=priced(cat,promos,code) if code else None
                 if x: p[sid]=x; changed=True
             if changed:
-                db.document(f'prices/{iid}').set({'name':it.get('name',''),'p':p,'ex':False,'upd':now()}); updated+=1
+                put_doc('prices',iid,{'name':it.get('name',''),'p':p,'ex':False,'upd':now()}); updated+=1
     errs=[f"{k}: {v['error']}" for k,v in report.items() if 'error' in v]
-    sref.set({**sync,'lastRun':now(),'status':'ok' if not errs else '; '.join(errs),'updated':updated,'stores':report})
+    sync=get_doc('config','sync') or sync   # re-read: a refresh may have been requested meanwhile
+    put_doc('config','sync',{**sync,'lastRun':now(),'status':'ok' if not errs else '; '.join(errs),'updated':updated,'stores':report})
     print('done',updated,report)
 
 if __name__=='__main__': main()

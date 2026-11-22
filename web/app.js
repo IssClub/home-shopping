@@ -351,26 +351,37 @@ window.addEventListener('hashchange',()=>{const t=location.hash.slice(1); if(['l
 /* ---------- boot ---------- */
 (function(){const t=location.hash.slice(1); if(['list','shop','compare','more'].includes(t)) S.tab=t;})();
 render();
-const cfgOk=window.FIREBASE_CONFIG&&window.FIREBASE_CONFIG.apiKey&&!/YOUR_/.test(window.FIREBASE_CONFIG.apiKey);
+const SC=window.SUPABASE_CONFIG||{};
+const cfgOk=!!(SC.url&&SC.anonKey&&!/YOUR_/.test(SC.url+SC.anonKey));
+const SB_JS='https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.119.2/+esm';
 async function bootCloud(){
-  const V='10.14.1',base='https://www.gstatic.com/firebasejs/'+V+'/';
-  const [{initializeApp},A,F]=await Promise.all([import(base+'firebase-app.js'),import(base+'firebase-auth.js'),import(base+'firebase-firestore.js')]);
-  const app=initializeApp(window.FIREBASE_CONFIG);
-  const auth=A.getAuth(app);
-  const fdb=F.initializeFirestore(app,{localCache:F.persistentLocalCache({tabManager:F.persistentMultipleTabManager()})});
-  DB={
-    doc:p=>({set:d=>F.setDoc(F.doc(fdb,p),d),delete:()=>F.deleteDoc(F.doc(fdb,p)),
-      onSnapshot:(n,e)=>F.onSnapshot(F.doc(fdb,p),s=>n({exists:s.exists(),data:()=>s.data(),id:s.id}),e)}),
-    collection:c=>({onSnapshot:(n,e)=>F.onSnapshot(F.collection(fdb,c),s=>n({docs:s.docs.map(d=>({id:d.id,data:()=>d.data()}))}),e)})
-  };
+  const {createClient}=await import(SB_JS);
+  const sb=createClient(SC.url,SC.anonKey,{auth:{persistSession:true,autoRefreshToken:true}});
+  const cloud=window.makeCloudDB(sb,{toast});
+  DB=cloud;
   const form=$('#loginform'),msg=$('#loginmsg');
   form.addEventListener('submit',async e=>{e.preventDefault();msg.textContent='מתחבר…';
-    try{await A.signInWithEmailAndPassword(auth,$('#lemail').value.trim(),$('#lpass').value)}catch(err){msg.textContent='האימייל או הסיסמה שגויים'}});
-  $('#logout').addEventListener('click',()=>A.signOut(auth));
-  let started=false,unsubs=[];
-  A.onAuthStateChanged(auth,user=>{
-    $('#login').hidden=!!user; $('#logout').hidden=!user;
-    if(!user){unsubs.forEach(u=>u());unsubs=[];started=false;S.items={};S.prices={};S.loaded=false;render();return}
+    const {error}=await sb.auth.signInWithPassword({email:$('#lemail').value.trim(),password:$('#lpass').value});
+    msg.textContent=error?(navigator.onLine?'האימייל או הסיסמה שגויים':'אין חיבור לאינטרנט'):''});
+  $('#logout').addEventListener('click',()=>{
+    if(cloud.pending()&&!confirm('יש שינויים שעוד לא נשלחו לשרת ויימחקו מהמכשיר. להתנתק בכל זאת?')) return;
+    sb.auth.signOut({scope:'local'});
+  });
+  let started=false,live=false,unsubs=[];
+  const showApp=()=>{$('#login').hidden=true;$('#logout').hidden=false};
+  function showLogin(){ unsubs.forEach(u=>u());unsubs=[];started=false;S.items={};S.prices={};S.loaded=false;
+    $('#login').hidden=false;$('#logout').hidden=true;render(); }
+  const goLive=()=>{ if(live) return; live=true; setTimeout(()=>cloud.start(),0); };
+  // מכשיר שכבר התחבר בעבר: מציגים מיד את העותק השמור, גם בלי אינטרנט
+  if(ls.get('shopUser')&&cloud.hasCache()){ showApp(); listen(); }
+  sb.auth.onAuthStateChange((event,session)=>{
+    if(session){ ls.set('shopUser','1'); showApp(); listen(); goLive(); return; }
+    if(event==='SIGNED_OUT'){ cloud.stop(); cloud.clear(); live=false; ls.set('shopUser',''); showLogin(); return; }
+    if(!navigator.onLine&&ls.get('shopUser')&&cloud.hasCache()) return;   // בלי רשת: נשארים על העותק השמור
+    cloud.stop(); live=false; showLogin();
+  });
+  addEventListener('offline',()=>toast('אין חיבור. השינויים יישמרו ויישלחו כשהחיבור יחזור'));
+  function listen(){
     if(started) return; started=true;
     const to=setTimeout(()=>{ if(!S.loaded){S.loaded=true;toast('אין חיבור לשרת. מוצג המידע האחרון ששמור');render()} },10000);
     const fail=()=>{S.loaded=true;render()};
@@ -378,9 +389,9 @@ async function bootCloud(){
     unsubs.push(DB.collection('prices').onSnapshot(s=>{S.prices={};s.docs.forEach(d=>S.prices[d.id]={id:d.id,...d.data()});render()},fail));
     unsubs.push(DB.doc('config/stores').onSnapshot(s=>{ if(s.exists){const d=s.data();if(d&&Array.isArray(d.list)){S.stores=d.list;render();return}} S.stores=DEFAULT_STORES; if(!S.seededStores){S.seededStores=true;write('config/stores',{list:DEFAULT_STORES})} render()},fail));
     unsubs.push(DB.doc('config/sync').onSnapshot(s=>{ S.sync=s.exists?s.data():null; render()},fail));
-  });
+  }
 }
-if(cfgOk){ $('#login').hidden=false; bootCloud().catch(()=>{toast('שגיאה בחיבור ל-Firebase')}); }
+if(cfgOk){ $('#login').hidden=!!ls.get('shopUser'); bootCloud().catch(()=>{toast('שגיאה בטעינת החיבור לשרת');$('#login').hidden=false}); }
 else { $('#login').hidden=true; $('#demo').hidden=false; localLoad(); S.loaded=true; render(); }
 if('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
 })();

@@ -14,11 +14,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
-        with: { python-version: '3.12', cache: pip, cache-dependency-path: sync/requirements.txt }
-      - run: pip install -r sync/requirements.txt
+        with: { python-version: '3.12' }
       - name: Run sync
         working-directory: sync
         env:
-          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
           MODE: ${{ (github.event.schedule == '*/10 * * * *') && 'check' || 'nightly' }}
         run: python sync.py
