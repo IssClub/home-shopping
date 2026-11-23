@@ -45,7 +45,7 @@ const FIN={'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'};
 const stem=x=>norm(x).replace(/[ךםןףץ]/g,c=>FIN[c]).replace(/["'׳״`]/g,'');   // אותיות סופיות וגרשיים לא משנים את ההתאמה
 const KW={}; const kwList=id=>(KW[id]??=BYID[id].k.split('|').filter(Boolean).map(stem));
 const PRE='הו';                                                               // תחילית: "ה" (הלחם) או "ו" (וחלב)
-let CATMAP={};                                                                // תיקונים שלמדנו מהמשתמש: שם מוצר > קטגוריה
+let CATMAP={},ALIAS={},NOMERGE={};                                                                // תיקונים שלמדנו מהמשתמש: שם מוצר > קטגוריה
 function guess(name){
   const mapped=CATMAP[stem(name)]; if(mapped&&BYID[mapped]) return mapped;
   const n=stem(name),toks=n.split(' ').filter(Boolean);
@@ -92,11 +92,11 @@ function write(path,data){
   if(DB){ chain[path]=(chain[path]||Promise.resolve()).then(()=>(data===null?DB.doc(path).delete():DB.doc(path).set(data))).catch(()=>toast('השמירה נכשלה, נסו שוב')); return chain[path]; }
   if(col==='items'){ data===null?delete S.items[id]:S.items[id]={id,...data}; }
   else if(col==='prices'){ data===null?delete S.prices[id]:S.prices[id]={id,...data}; }
-  else if(col==='config'){ if(id==='catmap') CATMAP=data.map||{}; else S.stores=data.list; }
+  else if(col==='config'){ if(id==='catmap') CATMAP=data.map||{}; else if(id==='aliases') ALIAS=data.map||{}; else if(id==='nomerge') NOMERGE=data.map||{}; else S.stores=data.list; }
   localSave(); render(); return Promise.resolve();
 }
-function localSave(){ if(DB) return; ls.set('shopLocal',JSON.stringify({items:S.items,prices:S.prices,stores:S.stores,catmap:CATMAP})); }
-function localLoad(){ try{const d=JSON.parse(ls.get('shopLocal')||'null'); if(d){S.items=d.items||{};S.prices=d.prices||{};if(d.stores)S.stores=d.stores;if(d.catmap)CATMAP=d.catmap}}catch(e){} }
+function localSave(){ if(DB) return; ls.set('shopLocal',JSON.stringify({items:S.items,prices:S.prices,stores:S.stores,catmap:CATMAP,alias:ALIAS,nomerge:NOMERGE})); }
+function localLoad(){ try{const d=JSON.parse(ls.get('shopLocal')||'null'); if(d){S.items=d.items||{};S.prices=d.prices||{};if(d.stores)S.stores=d.stores;if(d.catmap)CATMAP=d.catmap;if(d.alias)ALIAS=d.alias;if(d.nomerge)NOMERGE=d.nomerge}}catch(e){} }
 const saveStores=list=>write('config/stores',{list});
 
 /* ---------- data helpers ---------- */
@@ -104,9 +104,84 @@ const items=()=>Object.values(S.items);
 const unit=(pr,sid)=>{const x=pr&&pr.p&&pr.p[sid]; if(!x) return null; const sale=+x.sale||0,reg=+x.price||0; const v=sale>0?sale:reg; if(!(v>0)) return null; return {v,promo:sale>0&&(!reg||sale<reg),note:x.note||'',reg,pname:x.pname||'',src:x.src||''}};
 const itemDoc=(it,patch)=>({name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now(),...patch});
 function addItem(name,qty,cat){
-  const id=idOf(name),ex=S.items[id];
+  let id=idOf(name),ex=S.items[id];
+  const al=ALIAS[stem(name)]; if(!ex&&al&&S.items[al.id]){id=al.id;ex=S.items[id];}   // שם שכבר מוזג בעבר
   if(ex) return write('items/'+id,itemDoc(ex,{qty:(ex.qty||1)+qty,done:false}));
   return write('items/'+id,{name:norm(name),cat:cat||guess(name),qty,done:false,ts:Date.now()});
+}
+
+/* ---------- כפילויות: זיהוי והצעת מיזוג ---------- */
+const STOP=new Set(['של','עם','בלי','ו','או','את','ל','ב','מוצר']);
+const NUMTOK=/^[\d.,x*]+$|^(גרם|גר|קג|קילו|ליטר|מל|יח|יחידות|חבילה|חבילות|מארז|פחית|בקבוק|שקית)$/;
+const SYN=[
+ ['נייר מטבח','מגבות נייר','מגבת נייר','נייר סופג','מגבות מטבח'],
+ ['נייר טואלט','נייר שירותים'],
+ ['שקיות אשפה','שקיות זבל','שקיות לאשפה'],
+ ['קפה נמס','נס קפה','נסקפה'],
+ ['סבון כלים','נוזל כלים','נוזל לכלים'],
+ ['מרכך כביסה','מרכך בגדים'],
+ ['אבקת כביסה','אבקה לכביסה'],
+ ['גמבה','פלפל גמבה','פלפל צבעוני'],
+ ['קורנפלקס','קורנפלייקס'],
+ ['חלב סויה','משקה סויה'],['חלב שקדים','משקה שקדים'],
+ ['מלח שולחן','מלח'],['תפוח אדמה','תפוחי אדמה'],['עגבנייה','עגבניה'],
+ ['נייר אפייה','נייר אפיה'],['צ\'יפס','ציפס']
+];
+function single(t,i,arr){   // יחיד/רבים, סמיכות ("גבינת" > "גבינ"), ה' בסוף
+  if(t.length>4&&(t.endsWith('ימ')||t.endsWith('ות'))) return t.slice(0,-2);   // ים נכתב כאן 'ימ' כי stem מחליף אותיות סופיות
+  if(t.length>3&&t.endsWith('ה')) return t.slice(0,-1);
+  if(t.length>4&&t.endsWith('ת')&&i<arr.length-1) return t.slice(0,-1);
+  return t;
+}
+function toks(name){ return stem(name).split(' ').filter(t=>t&&!STOP.has(t)&&!NUMTOK.test(t)).map(single); }
+const SYNG=SYN.map(g=>g.map(x=>toks(x).join(' ')));
+function synGroup(tk){ const j=tk.join(' '); for(let g=0;g<SYNG.length;g++) if(SYNG[g].includes(j)) return g; return -1; }   // השם כולו שווה לאחת הצורות
+function lev1(a,b){ if(a===b) return true; if(Math.abs(a.length-b.length)>1) return false; let i=0; while(i<a.length&&i<b.length&&a[i]===b[i]) i++;
+  if(a.length===b.length) return a.slice(i+1)===b.slice(i+1); return a.length>b.length?a.slice(i+1)===b.slice(i):b.slice(i+1)===a.slice(i); }
+const pairKey=(a,b)=>[a,b].sort().join('|');
+function relate(a,b){
+  if(NOMERGE[pairKey(a.id,b.id)]) return null;
+  const ta=toks(a.name),tb=toks(b.name); if(!ta.length||!tb.length) return null;
+  const sa=new Set(ta),sb=new Set(tb);
+  const inB=ta.every(t=>sb.has(t)),inA=tb.every(t=>sa.has(t));
+  const generic=nm=>{const r=stem(nm).split(' ').filter(t=>t&&!STOP.has(t)&&!NUMTOK.test(t));return r.length===1&&guess(r[0])!=='other';};   // "חלב", "גבינה" לבדם הם כלליים מדי
+  if(inA&&inB) return {conf:3,reason:'אותו מוצר בכתיב שונה'};
+  const g1=synGroup(ta),g2=synGroup(tb); if(g1>=0&&g1===g2) return {conf:3,reason:'מילים נרדפות'};
+  if(inB&&!generic(a.name)&&ta.some(t=>t.length>=3)) return {conf:2,reason:`"${a.name}" מופיע בתוך "${b.name}"`};
+  if(inA&&!generic(b.name)&&tb.some(t=>t.length>=3)) return {conf:2,reason:`"${b.name}" מופיע בתוך "${a.name}"`};
+  const ja=ta.join(' '),jb=tb.join(' ');
+  if(!/[\d%]/.test(ja+jb)&&ja.length>=5&&jb.length>=5&&lev1(ja,jb)) return {conf:1,reason:'כתיב דומה'};
+  return null;
+}
+S.flip={};
+function suggestions(){
+  const all=items(),out=[];
+  for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){
+    const a=all[i],b=all[j],r=relate(a,b); if(!r) continue;
+    const key=pairKey(a.id,b.id);
+    let keep=toks(a.name).length>=toks(b.name).length&&a.name.length>=b.name.length?a:b, drop=keep===a?b:a;   // נשאר השם המפורט יותר
+    if(S.flip[key]) [keep,drop]=[drop,keep];
+    out.push({key,keep,drop,...r});
+  }
+  return out.sort((x,y)=>y.conf-x.conf);
+}
+function mergeItems(keepId,dropId){
+  const k=S.items[keepId],d=S.items[dropId]; if(!k||!d||keepId===dropId) return;
+  write('items/'+keepId,itemDoc(k,{qty:Math.min(99,Math.max(k.qty||1,d.qty||1)),done:!!(k.done&&d.done)}));
+  write('items/'+dropId,null);
+  const pk=S.prices[keepId],pd=S.prices[dropId];
+  if(pd){ write('prices/'+keepId,{name:k.name,p:{...(pd.p||{}),...((pk&&pk.p)||{})},ex:false}); write('prices/'+dropId,null); }
+  ALIAS={...ALIAS,[stem(d.name)]:{id:keepId,name:k.name}}; write('config/aliases',{map:ALIAS});
+}
+function dismissPair(key){ NOMERGE={...NOMERGE,[key]:1}; write('config/nomerge',{map:NOMERGE}); }
+function sugBanner(){ const n=suggestions().length; return n?`<button class="banner" data-act="opensug"><b>${n}</b> ${n===1?'כפילות אפשרית':'כפילויות אפשריות'}, לבדיקה</button>`:''; }
+function sugSheetHTML(){
+  const sg=suggestions();
+  const head=`<div class="shead"><div style="flex:1;min-width:0"><h3>כפילויות אפשריות</h3><span class="note">מיזוג משאיר שם אחד, לוקח את הכמות הגדולה ומשמר מחירים</span></div><button class="btn ghost small" data-act="closesheet">סגור</button></div>`;
+  if(!sg.length) return head+'<div class="empty" style="border:0">אין כפילויות חשודות</div>';
+  return head+sg.map(x=>`<div class="panel" style="margin:0"><div><b>${esc(x.drop.name)}</b> ${x.drop.qty>1?`<span class="qty">×${x.drop.qty}</span>`:''} <span class="note">יתמזג לתוך</span> <b>${esc(x.keep.name)}</b> ${x.keep.qty>1?`<span class="qty">×${x.keep.qty}</span>`:''}</div>
+    <div class="tags"><span class="tag ${x.conf>=3?'':'warn'}">${esc(x.reason)}</span></div>
+    <div class="acts"><button class="btn small" data-act="mergesug" data-a="${x.keep.id}" data-b="${x.drop.id}">מזג</button><button class="btn ghost small" data-act="flipsug" data-key="${x.key}">החלף כיוון</button><button class="btn ghost small" data-act="nomergesug" data-key="${x.key}">אלה שונים</button></div></div>`).join('');
 }
 function sorted(list){return list.slice().sort((a,b)=>(a.done-b.done)||((a.ts||0)-(b.ts||0))||a.name.localeCompare(b.name,'he'))}
 function groups(filter){
@@ -158,7 +233,7 @@ function tile(g,mode,sid){
 }
 function viewList(){
   const gs=groups(); if(!gs.length) return emptyState();
-  return hero()+`<div class="tiles">${gs.map(g=>tile(g,'list')).join('')}</div>`;
+  return hero()+sugBanner()+`<div class="tiles">${gs.map(g=>tile(g,'list')).join('')}</div>`;
 }
 function viewShop(){
   const all=items(); if(!all.length) return emptyState();
@@ -229,12 +304,13 @@ function render(){
   const keep=document.activeElement&&document.activeElement.id==='newstore'?$('#newstore').value:null;
   v.innerHTML=f(); if(keep!==null&&$('#newstore'))$('#newstore').value=keep;
   if(S.cat&&sheetOpen){const sh=$('#sheetroot .sheet');if(sh){const t=sh.scrollTop;sh.innerHTML=catSheetHTML();sh.scrollTop=t}}
+  if(S.sug&&sheetOpen){const sh=$('#sheetroot .sheet');if(sh){const t=sh.scrollTop;sh.innerHTML=sugSheetHTML();sh.scrollTop=t}}
 }
 
 /* ---------- sheets ---------- */
 let sheetOpen=false;
 function openSheet(html){ $('#sheetroot').innerHTML=`<div class="scrim" data-act="closesheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`; sheetOpen=true; }
-function closeSheet(){ const b=S.back; S.back=null; S.cat=null; $('#sheetroot').innerHTML=''; sheetOpen=false; if(b){S.cat=b; openSheet(catSheetHTML());} }
+function closeSheet(){ const b=S.back; S.back=null; S.cat=null; S.sug=false; $('#sheetroot').innerHTML=''; sheetOpen=false; if(b){S.cat=b; openSheet(catSheetHTML());} }
 function openCat(id,mode){ S.cat={id,mode}; openSheet(catSheetHTML()); }
 function editSheet(id){
   const it=S.items[id]; if(!it) return; const pr=S.prices[id]||{p:{}};
@@ -327,6 +403,10 @@ document.addEventListener('click',e=>{
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
     case 'opencat': openCat(id,el.dataset.mode); break;
     case 'edit': editSheet(id); break;
+    case 'opensug': S.sug=true; openSheet(sugSheetHTML()); break;
+    case 'mergesug': mergeItems(el.dataset.a,el.dataset.b); toast('מוזג'); break;
+    case 'flipsug': S.flip[el.dataset.key]=!S.flip[el.dataset.key]; render(); break;
+    case 'nomergesug': dismissPair(el.dataset.key); toast('לא אציע שוב'); break;
     case 'toggle':{const it=S.items[id]; if(it) write('items/'+id,itemDoc(it,{done:!it.done})); break}
     case 'shopstore': S.shopStore=id; ls.set('shopStore',id); render(); break;
     case 'hidedone': S.hideDone=!S.hideDone; ls.set('hideDone',S.hideDone?'1':'0'); render(); break;
@@ -400,6 +480,8 @@ async function bootCloud(){
     unsubs.push(DB.collection('prices').onSnapshot(s=>{S.prices={};s.docs.forEach(d=>S.prices[d.id]={id:d.id,...d.data()});render()},fail));
     unsubs.push(DB.doc('config/stores').onSnapshot(s=>{ if(s.exists){const d=s.data();if(d&&Array.isArray(d.list)){S.stores=d.list;render();return}} S.stores=DEFAULT_STORES; if(!S.seededStores){S.seededStores=true;write('config/stores',{list:DEFAULT_STORES})} render()},fail));
     unsubs.push(DB.doc('config/catmap').onSnapshot(s=>{ CATMAP=(s.exists&&s.data()&&s.data().map)||{}; render()},fail));
+    unsubs.push(DB.doc('config/aliases').onSnapshot(s=>{ ALIAS=(s.exists&&s.data()&&s.data().map)||{}; render()},fail));
+    unsubs.push(DB.doc('config/nomerge').onSnapshot(s=>{ NOMERGE=(s.exists&&s.data()&&s.data().map)||{}; render()},fail));
     unsubs.push(DB.doc('config/sync').onSnapshot(s=>{ S.sync=s.exists?s.data():null; render()},fail));
   }
 }

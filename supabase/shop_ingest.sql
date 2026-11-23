@@ -27,7 +27,7 @@ language plpgsql security definer
 set search_path = public
 as $$
 declare
-  o jsonb; v_id text; v_alt text; v_qty int; v_cat text;
+  o jsonb; v_id text; v_alt text; v_qty int; v_cat text; v_key text; v_alias jsonb;
   added int := 0; marked int := 0; removed int := 0; missing int := 0;
   cats text[] := array['produce','bakery','dairy','meat','frozen','dry','canned','snacks','choc','drinks','clean','care','other'];
 begin
@@ -48,6 +48,15 @@ begin
   for o in select * from jsonb_array_elements(p_ops) loop
     v_id := o ->> 'id';
     if v_id is null or v_id !~ '^i[0-9a-z]{1,12}$' then missing := missing + 1; continue; end if;
+    -- שם שמוזג בעבר באפליקציה (config/aliases) מפנה למוצר שנשאר
+    if (o ->> 'name') is not null then
+      v_key := regexp_replace(translate(btrim(regexp_replace(o ->> 'name', '\s+', ' ', 'g')), 'ךםןףץ', 'כמנפצ'), '["''׳״`]', '', 'g');
+      select data -> 'map' -> v_key into v_alias from docs where col = 'config' and id = 'aliases';
+      if v_alias is not null and (v_alias ->> 'id') ~ '^i[0-9a-z]{1,12}$'
+         and exists (select 1 from docs where col = 'items' and id = v_alias ->> 'id') then
+        v_id := v_alias ->> 'id';
+      end if;
+    end if;
     -- אם אין מוצר עם המזהה הזה אבל יש מוצר באותו שם (בלי גרשיים ורווחים), משתמשים בו
     v_alt := null;
     if (o ->> 'name') is not null and not exists (select 1 from docs where col = 'items' and id = v_id) then
