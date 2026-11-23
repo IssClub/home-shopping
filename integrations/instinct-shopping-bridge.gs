@@ -4,7 +4,7 @@
  *
  * Script Properties (Project settings > Script properties), לא בקוד ולא ב-git:
  *   KEY            מילה סודית ששולח המייל (שורת KEY:)
- *   SENDER         כתובת השולח של Instinct
+ *   SENDER         כתובת השולח של Instinct. כמה סוכנים: כתובות מופרדות בפסיק (a@x.com,b@x.com)
  *   SUPABASE_URL   כתובת הפרויקט
  *   SUPABASE_ANON  המפתח הציבורי (publishable)
  *   INGEST_SECRET  סוד הקליטה שהוגדר ב-Supabase (ingest_config, name = shop)
@@ -44,17 +44,26 @@ function parseBody_(body, key) {
   return { ok: true, ops: ops };
 }
 
+/** SENDER יכול להכיל כמה כתובות, מופרדות בפסיק, נקודה-פסיק או רווח. */
+function sendersList_(raw) {
+  return String(raw || '').split(/[,;\s]+/).map(function (x) { return x.trim().toLowerCase(); }).filter(Boolean);
+}
+function fromAllowed_(from, senders) {
+  var f = String(from || '').toLowerCase();
+  return senders.some(function (a) { return f.indexOf(a) >= 0; });
+}
+
 function run() {
   var p = PropertiesService.getScriptProperties();
-  var key = p.getProperty('KEY'), sender = p.getProperty('SENDER');
-  if (!key || !sender) throw new Error('חסרים KEY או SENDER ב-Script Properties');
+  var key = p.getProperty('KEY'), senders = sendersList_(p.getProperty('SENDER'));
+  if (!key || !senders.length) throw new Error('חסרים KEY או SENDER ב-Script Properties');
   var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
   var threads = GmailApp.search('subject:"' + SUBJECT_PREFIX + '" from:' + sender + ' is:unread', 0, 20);   // כפילויות נחסמות ב-Supabase לפי מזהה המייל
   threads.forEach(function (t) {
     var handled = false;
     t.getMessages().forEach(function (msg) {
       if (!msg.isUnread()) return;
-      if (msg.getFrom().toLowerCase().indexOf(sender.toLowerCase()) < 0) return;   // רק מהשולח הנכון
+      if (!fromAllowed_(msg.getFrom(), senders)) return;   // רק משולחים מורשים
       var res = parseBody_(msg.getPlainBody(), key);
       if (!res.ok) { Logger.log('מייל נדחה: ' + res.error + ' | נושא: ' + msg.getSubject()); msg.markRead(); return; }
       if (!res.ops.length) { Logger.log('אין פקודות במייל: ' + msg.getSubject()); msg.markRead(); return; }
