@@ -84,7 +84,7 @@ h1{font:700 1.6rem/1.1 var(--font-head);margin:0}
 .tiles.editing .tile:nth-child(2n){animation-delay:-.12s}
 .tiles.editing .tile:nth-child(3n){animation-delay:-.2s}
 .tile.ph{opacity:.25}
-.ghost{position:fixed;z-index:80;pointer-events:none;margin:0;transform:scale(1.08) rotate(2deg);box-shadow:0 14px 30px rgba(0,0,0,.28);animation:none!important}
+.dragghost{position:fixed;z-index:80;pointer-events:none;margin:0;transform:scale(1.08) rotate(2deg);box-shadow:0 14px 30px rgba(0,0,0,.28);animation:none!important}
 .editbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:0 0 10px;padding:8px 8px 8px 14px;border-radius:14px;background:var(--accent-soft);color:var(--accent);font-weight:600;font-size:.9rem}
 /* sheets & rows */
 .scrim{position:fixed;inset:0;background:rgba(5,15,11,.5);z-index:40;display:flex;align-items:flex-end;justify-content:center}

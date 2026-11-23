@@ -449,7 +449,7 @@ let lpTimer=null,lpStart=null;
 function saveOrder(ids){ S.order=ids.concat(S.order.filter(x=>!ids.includes(x))); ls.set('tileOrder',JSON.stringify(S.order)); }
 function startDrag(tile,e){
   const grid=tile.parentElement,r=tile.getBoundingClientRect();
-  const ghost=tile.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('complete');
+  const ghost=tile.cloneNode(true); ghost.classList.add('dragghost'); ghost.classList.remove('complete');
   Object.assign(ghost.style,{width:r.width+'px',height:r.height+'px',left:r.left+'px',top:r.top+'px'});
   document.body.appendChild(ghost); tile.classList.add('ph'); S.dragging=true;
   const dx=e.clientX-r.left,dy=e.clientY-r.top;
