@@ -236,3 +236,16 @@ select.slim{padding:9px 12px;border-radius:12px;border:1px solid var(--line);bac
 .prow .psub{grid-column:1/-1;font-size:.72rem;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .prow .pnote{display:none;grid-column:1/-1;text-align:start;font-size:.9rem}
 .prow.shownote .pnote{display:block}
+
+/* קטגוריות משלי */
+.addtile{border:2px dashed var(--line);background:transparent;border-radius:16px;min-height:95px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;color:var(--muted);font:600 .78rem var(--font-head);padding:8px}
+.addtile .plus{font:500 1.8rem/1 var(--font-head);color:var(--accent)}
+.swatches{display:flex;flex-wrap:wrap;gap:10px}
+.swc{width:34px;height:34px;border-radius:50%;border:3px solid transparent;background:var(--c);box-shadow:0 0 0 1px var(--line)}
+.swc[aria-pressed="true"]{border-color:var(--surface);box-shadow:0 0 0 3px var(--c)}
+.iconpick{--c:var(--accent);display:flex;flex-wrap:wrap;gap:8px}
+.iconpick button{width:42px;height:42px;border-radius:12px;border:1px solid var(--line);background:var(--surface2);display:grid;place-items:center}
+.iconpick svg{width:22px;height:22px;stroke:var(--c);fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.iconpick button[aria-pressed="true"]{border-color:var(--c);background:color-mix(in srgb,var(--c) 18%,var(--surface))}
+.catrow{display:flex;align-items:center;gap:10px;width:100%;text-align:start;background:none;border:0;border-bottom:1px solid var(--line);padding:8px 0;font-weight:600}
+.catrow:last-child{border-bottom:0}

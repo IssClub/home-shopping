@@ -27,7 +27,7 @@ language plpgsql security definer
 set search_path = public
 as $$
 declare
-  o jsonb; v_id text; v_alt text; v_qty int; v_cat text; v_key text; v_alias jsonb;
+  o jsonb; v_id text; v_alt text; v_qty int; v_cat text; v_key text; v_alias jsonb; v_cust text;
   added int := 0; marked int := 0; removed int := 0; missing int := 0;
   cats text[] := array['produce','bakery','dairy','meat','frozen','dry','canned','snacks','choc','drinks','clean','care','other'];
 begin
@@ -68,7 +68,17 @@ begin
     end if;
     if o ->> 'op' = 'add' then
       v_qty := greatest(1, least(99, coalesce((o ->> 'qty')::int, 1)));
+      -- קטגוריה מובנית (לפי מזהה), או קטגוריה שהוספתם באפליקציה (לפי מזהה או לפי השם בעברית)
       v_cat := case when (o ->> 'cat') = any (cats) then o ->> 'cat' else 'other' end;
+      if v_cat = 'other' and coalesce(o ->> 'cat', '') <> '' then
+        select e ->> 'id' into v_cust
+        from docs d, jsonb_array_elements(coalesce(d.data -> 'list', '[]'::jsonb)) e
+        where d.col = 'config' and d.id = 'categories'
+          and (e ->> 'id' = o ->> 'cat' or e ->> 'name' = btrim(o ->> 'cat'))
+        limit 1;
+        if v_cust is not null then v_cat := v_cust; end if;
+        v_cust := null;
+      end if;
       insert into docs(col, id, data, updated_at)
       values ('items', v_id,
         jsonb_build_object('name', left(o ->> 'name', 60), 'cat', v_cat, 'qty', v_qty, 'done', false,
