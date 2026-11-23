@@ -107,13 +107,105 @@ const saveStores=list=>write('config/stores',{list});
 /* ---------- data helpers ---------- */
 const items=()=>Object.values(S.items);
 const unit=(pr,sid)=>{const x=pr&&pr.p&&pr.p[sid]; if(!x) return null; const sale=+x.sale||0,reg=+x.price||0; const v=sale>0?sale:reg; if(!(v>0)) return null; return {v,promo:sale>0&&(!reg||sale<reg),note:x.note||'',reg,pname:x.pname||'',src:x.src||''}};
-const itemDoc=(it,patch)=>({name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now(),...patch});
+const itemDoc=(it,patch)=>({name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now(),...(it.bc?{bc:it.bc,bn:it.bn||''}:{}),...(it.by?{by:it.by}:{}),...patch});
 function addItem(name,qty,cat){
   let id=idOf(name),ex=S.items[id];
   const al=ALIAS[stem(name)]; if(!ex&&al&&S.items[al.id]){id=al.id;ex=S.items[id];}   // שם שכבר מוזג בעבר
   if(ex) return write('items/'+id,itemDoc(ex,{qty:(ex.qty||1)+qty,done:false}));
   return write('items/'+id,{name:norm(name),cat:cat||guess(name),qty,done:false,ts:Date.now()});
 }
+
+/* ---------- קטלוג מוצרים: בחירת מוצר מדויק לפי ברקוד ---------- */
+const catSearchFn=()=>(DB&&DB.searchCatalog)||window.__catalogSearch||null;   // window.__catalogSearch: לבדיקות בלבד
+const cleanName=n=>norm(String(n||'').replace(/^\*?מבצע\*?\s*/,'').replace(/\s+/g,' '));
+function pricesFromRow(row,old){   // מחירי הרשתות מהקטלוג, בלי לדרוס הזנה ידנית
+  const p={...(old||{})};
+  for(const sid of Object.keys(p)) if(p[sid]&&p[sid].src!=='manual'&&p[sid].code!==row.code) delete p[sid];
+  for(const [sid,v] of Object.entries(row.stores||{})){ if(p[sid]&&p[sid].src==='manual') continue; p[sid]={price:v.p,sale:0,note:'',code:row.code,pname:v.n,src:'auto'}; }
+  return p;
+}
+function bindProduct(id,row){
+  const it=S.items[id]; if(!it) return;
+  write('items/'+id,itemDoc(it,{bc:row.code,bn:cleanName(row.name)}));
+  write('prices/'+id,{name:it.name,p:pricesFromRow(row,(S.prices[id]&&S.prices[id].p)||{}),ex:false});
+}
+function addCatalogItem(row,qty,cat){
+  const name=cleanName(row.name),id=idOf(name),ex=S.items[id];
+  if(ex){ write('items/'+id,itemDoc(ex,{qty:Math.min(99,(ex.qty||1)+qty),done:false,bc:row.code,bn:name})); }
+  else write('items/'+id,{name,cat:cat||guess(name),qty,done:false,ts:Date.now(),bc:row.code,bn:name});
+  write('prices/'+id,{name,p:pricesFromRow(row,(S.prices[id]&&S.prices[id].p)||{}),ex:false});
+}
+const storeLabel=sid=>{const x=S.stores.find(t=>t.id===sid);return x?x.name:sid};
+function rowHTML(r,act,extra){
+  const st=Object.entries(r.stores||{}).map(([sid,v])=>`${esc(storeLabel(sid))} ${(+v.p).toFixed(2)}`).join(' · ');
+  return `<button type="button" class="prodrow" data-act="${act}" data-code="${esc(r.code)}" ${extra||''}><span class="pn">${esc(cleanName(r.name))}</span><span class="pm">${st||'אין מחיר'}</span><span class="pc">ברקוד ${esc(r.code)}</span></button>`;
+}
+let sgSeq=0;
+function attachSuggest(input,listEl,onPick){   // הצעות מהקטלוג בזמן הקלדה
+  if(!input||!listEl) return;
+  let tm=null,rows=[];
+  const run=async()=>{
+    const fn=catSearchFn(); if(!fn) return;
+    const q=parseItem(input.value)?parseItem(input.value).name:''; const my=++sgSeq;
+    if(norm(q).length<2){listEl.innerHTML='';rows=[];return}
+    try{ const r=await fn(q,6); if(my!==sgSeq) return; rows=r;
+      listEl.innerHTML=r.length?`<div class="sghead">מהקטלוג, לחצו על המוצר שאתם מתכוונים אליו</div>`+r.map((x,i)=>rowHTML(x,'sgpick',`data-i="${i}"`)).join(''):''; }
+    catch(e){ listEl.innerHTML=''; }
+  };
+  input.addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(run,260)});
+  listEl.addEventListener('click',e=>{ const b=e.target.closest('[data-act=sgpick]'); if(!b) return; e.stopPropagation();
+    const row=rows[+b.dataset.i]; if(!row) return; const qty=parseItem(input.value)?parseItem(input.value).qty:1;
+    onPick(row,qty); input.value=''; listEl.innerHTML=''; rows=[]; input.focus(); });
+}
+function pickDlg(initial,onPick){
+  const fn=catSearchFn(); if(!fn) return toast('הקטלוג זמין רק באפליקציה המחוברת');
+  dlg(`<h3>בחירת מוצר מהקטלוג</h3><span class="note">חפשו לפי שם או מותג (למשל "מוצרלה גד"), ולחצו על המוצר המדויק.</span>
+   <input id="pkq" class="slim" type="search" placeholder="חיפוש מוצר" autocomplete="off" value="${esc(initial||'')}">
+   <div id="pklist" class="prodlist"></div><div class="acts"><button class="btn ghost grow" data-act="dlgclose">סגור</button></div>`);
+  const inp=$('#pkq'),list=$('#pklist'); let rows=[],tm=null,seq=0;
+  const run=async()=>{
+    const q=norm(inp.value),my=++seq;
+    if(q.length<2){list.innerHTML='<div class="note" style="padding:8px 2px">כתבו לפחות שתי אותיות</div>';return}
+    list.innerHTML='<div class="note" style="padding:8px 2px">מחפש…</div>';
+    try{ const r=await fn(q,20); if(my!==seq) return; rows=r;
+      list.innerHTML=r.length?r.map((x,i)=>rowHTML(x,'pkpick',`data-i="${i}"`)).join(''):'<div class="note" style="padding:8px 2px">לא נמצא. נסו מילה אחרת, או שהקטלוג עוד לא נטען.</div>'; }
+    catch(e){ list.innerHTML='<div class="note" style="padding:8px 2px">הקטלוג עדיין לא זמין. הריצו את העדכון הלילי פעם אחת.</div>'; }
+  };
+  inp.addEventListener('input',()=>{clearTimeout(tm);tm=setTimeout(run,260)});
+  list.addEventListener('click',e=>{ const b=e.target.closest('[data-act=pkpick]'); if(!b) return; e.stopPropagation(); const row=rows[+b.dataset.i]; if(!row) return; dlgClose(); onPick(row); });
+  inp.focus(); if(norm(initial||'').length>=2) run(); else run();
+}
+
+/* ---------- מה השתנה מאז הכניסה האחרונה (הסוכן, בן בית אחר) ---------- */
+const K_KNOWN='knownItems';
+function readKnown(){ try{return JSON.parse(ls.get(K_KNOWN)||'null')}catch(e){return null} }
+function saveKnown(){ const m={}; for(const it of items()) m[it.id]=it.qty||1; ls.set(K_KNOWN,JSON.stringify(m)); }
+function checkNew(){
+  if(!(DB||window.__testNew)||!S.loaded) return;
+  if($('#dlgroot').innerHTML||sheetOpen||S.dragging){ setTimeout(checkNew,4000); return; }
+  const known=readKnown();
+  if(!known){ saveKnown(); return; }
+  const added=[],bumped=[];
+  for(const it of items()){
+    if(!(it.id in known)) added.push(it);
+    else if((it.qty||1)>known[it.id]) bumped.push({it,from:known[it.id]});
+  }
+  if(!added.length&&!bumped.length){ saveKnown(); return; }
+  const agent=added.filter(i=>i.by==='agent'),other=added.filter(i=>i.by!=='agent');
+  const chips=a=>a.map(i=>`<span class="chip2">${esc(i.name)}${(i.qty||1)>1?' ×'+i.qty:''}</span>`).join('');
+  dlg(`<h3>עודכן מאז הפעם האחרונה</h3>
+   ${agent.length?`<div class="lbl">הסוכן הוסיף (${agent.length})</div><div class="chips">${chips(agent)}</div>`:''}
+   ${other.length?`<div class="lbl">נוספו (${other.length})</div><div class="chips">${chips(other)}</div>`:''}
+   ${bumped.length?`<div class="lbl">הכמות עלתה (${bumped.length})</div><div class="chips">${bumped.map(b=>`<span class="chip2">${esc(b.it.name)} ${b.from}←${b.it.qty||1}</span>`).join('')}</div>`:''}
+   <div class="acts"><button class="btn grow" data-act="newok">הבנתי</button></div>`);
+}
+let armTimer=null;
+function armCheck(){ clearTimeout(armTimer); armTimer=setTimeout(checkNew,2500); }
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='hidden'){ if(S.loaded&&!$('#dlgroot').innerHTML) saveKnown(); }
+  else { S.armUntil=Date.now()+8000; armCheck(); }
+});
+window.addEventListener('pagehide',()=>{ if(S.loaded&&!$('#dlgroot').innerHTML) saveKnown(); });
 
 /* ---------- כפילויות: זיהוי והצעת מיזוג ---------- */
 const STOP=new Set(['של','עם','בלי','ו','או','את','ל','ב','מוצר']);
@@ -350,6 +442,7 @@ function editSheet(id){
   const it=S.items[id]; if(!it) return; const pr=S.prices[id]||{p:{}};
   if(S.cat){S.back=S.cat;S.cat=null}
   openSheet(`<div class="ehead"><h3>${esc(it.name)}</h3><div class="stepper sm"><button type="button" data-act="qty" data-d="-1" aria-label="פחות">−</button><output id="qv">${it.qty||1}</output><button type="button" data-act="qty" data-d="1" aria-label="יותר">+</button></div></div>
+  ${catSearchFn()?`<div class="prodbar"><span class="note" id="prodline">${it.bc?'מוצר נבחר: '+esc(it.bn||it.bc):'התאמה אוטומטית לפי שם'}</span><button class="btn ghost small" data-act="pickprod" data-id="${id}">בחר מוצר</button><button class="btn ghost small" id="clearprod" data-act="clearprod" data-id="${id}" ${it.bc?'':'hidden'}>בטל</button></div>`:''}
   <select id="ecat" class="slim" aria-label="קטגוריה" data-prev="${it.cat}">${CATS.map(c=>`<option value="${c.id}" ${c.id===it.cat?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="__new__">+ קטגוריה חדשה…</option></select>
   <div class="pcols"><span>מחירים לפי סופר, ליחידה (₪)</span><span>רגיל</span><span>מבצע</span></div>
   ${S.stores.map(s=>{const x=(pr.p||{})[s.id]||{};const auto=x.src==='auto'&&x.pname;
@@ -446,6 +539,9 @@ document.addEventListener('click',e=>{
     case 'dlgok':{const f=S.confirmFn; S.confirmFn=null; dlgClose(); if(f) f(); break}
     case 'dlgclose': if(!el.classList.contains('scrim')||e.target===el){S.confirmFn=null;S.addCat=null;S.catForm=null;dlgClose()} break;
     case 'addcat': addDlg(el.dataset.cat); break;
+    case 'newok': dlgClose(); saveKnown(); break;
+    case 'pickprod': {const it=S.items[id]; if(it) pickDlg(norm(it.name).split(' ')[0],row=>{ bindProduct(id,row); const l=$('#prodline'); if(l) l.textContent='מוצר נבחר: '+cleanName(row.name); const c=$('#clearprod'); if(c) c.hidden=false; toast('המוצר נבחר, המחירים עודכנו'); }); break}
+    case 'clearprod': {const it=S.items[id]; if(it){ const d=itemDoc(it,{}); delete d.bc; delete d.bn; write('items/'+id,d); const l=$('#prodline'); if(l) l.textContent='התאמה אוטומטית לפי שם'; const c=$('#clearprod'); if(c) c.hidden=true; toast('חזרנו להתאמה לפי שם')} break}
     case 'newcat': catDlg(null,nid=>{ if(S.tab==='list') addDlg(nid); }); break;
     case 'editcat': catDlg(id,null); break;
     case 'pickcolor': if(S.catForm){S.catForm.c=el.dataset.v; paintCatForm()} break;
@@ -496,7 +592,8 @@ document.addEventListener('change',e=>{
   }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($('#dlgroot').innerHTML){S.confirmFn=null;S.addCat=null;S.catForm=null;dlgClose();return} if(sheetOpen) closeSheet(); } if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
-$('#addform').addEventListener('submit',e=>{e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
+attachSuggest($('#addin'),$('#sugs'),(row,qty)=>{ addCatalogItem(row,qty); toast('נוסף: '+cleanName(row.name)); });
+$('#addform').addEventListener('submit',e=>{ $('#sugs').innerHTML='';e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
 
 
 /* ---------- קטגוריות משלי ---------- */
@@ -541,7 +638,7 @@ function delCat(){
 /* ---------- מחיקה, חלונות אישור והוספה לקטגוריה ---------- */
 function deleteItem(id){
   const it=S.items[id]; if(!it) return; S.sw=null;
-  const snap={name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now()};
+  const snap=itemDoc(it,{});
   write('items/'+id,null); toast(`"${it.name}" נמחק`,()=>write('items/'+id,snap));
 }
 function dlg(html){ $('#dlgroot').innerHTML=`<div class="scrim dlg" data-act="dlgclose"><div class="sheet dlgbox" role="dialog" aria-modal="true">${html}</div></div>`; }
@@ -554,8 +651,9 @@ function addDlg(catId){
   const cat=BYID[catId]; if(!cat) return; S.addCat=catId;
   dlg(`<div class="shead" style="--c:${cat.c}">${icon(catId)}<div style="flex:1;min-width:0"><h3>הוספה ל${esc(cat.name)}</h3><span class="note">אפשר לכתוב כמות, למשל 2 חלב</span></div></div>
    <form id="addcatform" class="addbar" style="margin:0"><input id="addcatin" type="text" placeholder="שם המוצר" autocomplete="off" enterkeyhint="done"><button class="btn" type="submit">הוסף</button></form>
+   <div id="addcatsugs" class="prodlist sgs"></div>
    <div class="acts"><button class="btn ghost grow" data-act="dlgclose">סיום</button></div>`);
-  const inp=$('#addcatin'); if(inp) inp.focus();
+  const inp=$('#addcatin'); if(inp){ attachSuggest(inp,$('#addcatsugs'),(row,qty)=>{ addCatalogItem(row,qty,catId); toast('נוסף: '+cleanName(row.name)); }); inp.focus(); }
 }
 document.addEventListener('submit',e=>{
   if(!e.target||e.target.id!=='addcatform') return; e.preventDefault();
@@ -697,10 +795,10 @@ async function bootCloud(){
   });
   addEventListener('offline',()=>toast('אין חיבור. השינויים יישמרו ויישלחו כשהחיבור יחזור'));
   function listen(){
-    if(started) return; started=true;
+    if(started) return; started=true; S.armUntil=Date.now()+8000;
     const to=setTimeout(()=>{ if(!S.loaded){S.loaded=true;toast('אין חיבור לשרת. מוצג המידע האחרון ששמור');render()} },10000);
     const fail=()=>{S.loaded=true;render()};
-    unsubs.push(DB.collection('items').onSnapshot(s=>{S.items={};s.docs.forEach(d=>S.items[d.id]={id:d.id,...d.data()});S.loaded=true;clearTimeout(to);render()},fail));
+    unsubs.push(DB.collection('items').onSnapshot(s=>{S.items={};s.docs.forEach(d=>S.items[d.id]={id:d.id,...d.data()});S.loaded=true;clearTimeout(to);render(); if(S.armUntil&&Date.now()<S.armUntil) armCheck()},fail));
     unsubs.push(DB.collection('prices').onSnapshot(s=>{S.prices={};s.docs.forEach(d=>S.prices[d.id]={id:d.id,...d.data()});render()},fail));
     unsubs.push(DB.doc('config/stores').onSnapshot(s=>{ if(s.exists){const d=s.data();if(d&&Array.isArray(d.list)){S.stores=d.list;render();return}} S.stores=DEFAULT_STORES; if(!S.seededStores){S.seededStores=true;write('config/stores',{list:DEFAULT_STORES})} render()},fail));
     unsubs.push(DB.doc('config/catmap').onSnapshot(s=>{ CATMAP=(s.exists&&s.data()&&s.data().map)||{}; render()},fail));

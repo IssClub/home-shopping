@@ -36,6 +36,19 @@ def put_doc(col,id,data):
     sb('POST','docs?on_conflict=col,id',[{'col':col,'id':id,'data':data,'updated_at':now()}],
        prefer='resolution=merge-duplicates,return=minimal')
 
+def upsert_catalog(cats):
+    """Write every product (barcode, name, price per chain) to public.catalog for the in-app product picker."""
+    rows={}
+    for sid,(cat,_) in cats.items():
+        for code,it in cat.items():
+            if it['price']<=0 or not it['name']: continue
+            r=rows.setdefault(code,{'code':code,'name':it['name'],'mfr':'' if it.get('mfr','') in ('','לא ידוע') else it['mfr'],'stores':{},'updated_at':now()})
+            r['stores'][sid]={'n':it['name'],'p':round(it['price'],2)}
+    allrows=list(rows.values())
+    for i in range(0,len(allrows),1000):
+        sb('POST','catalog?on_conflict=code',allrows[i:i+1000],prefer='resolution=merge-duplicates,return=minimal')
+    return len(allrows)
+
 DEFAULT_SRC={'s1':{'user':'osherad','chain':'7290103152017','store':'032'},
              's2':{'user':'yohananof','chain':'7290803800003','store':'073'}}
 # words that signal a different kind of product unless the shopper wrote them
@@ -63,7 +76,7 @@ def load_catalog(src):
     if pf:
         for it in xml(cl.get(pf)).iter('Item'):
             code=tx(it,'ItemCode')
-            if code: items[code]={'code':code,'name':tx(it,'ItemName'),'price':num(tx(it,'ItemPrice'))}
+            if code: items[code]={'code':code,'name':tx(it,'ItemName'),'price':num(tx(it,'ItemPrice')),'mfr':tx(it,'ManufacturerName')}
     promos={}; today=datetime.date.today().isoformat()
     if pr:
         for p in xml(cl.get(pr)).iter('Promotion'):
@@ -138,6 +151,8 @@ def main():
         except Exception as e: report[sid]={'error':str(e)[:200]}
     updated=0
     if cats:
+        try: report['catalog']={'rows':upsert_catalog(cats)}
+        except Exception as e: report['catalog']={'error':'לא עודכן קטלוג (הרצת supabase/catalog.sql חסרה?): '+str(e)[:120]}
         all_prices=list_col('prices')
         for iid,it in list_col('items').items():
             it=it or {}
@@ -147,6 +162,14 @@ def main():
             for sid,(cat,promos) in cats.items():
                 cur=p.get(sid,{})
                 if cur.get('src')=='manual': continue
+                bc=it.get('bc')
+                if bc:   # מוצר שנבחר בקטלוג: לפי הברקוד בלבד, בלי ניחוש לפי שם
+                    if bc in cat: x=priced(cat,promos,bc)
+                    else:
+                        x=None
+                        if sid in p: del p[sid]; changed=True   # אין ברקוד כזה ברשת הזו
+                    if x: p[sid]=x; changed=True
+                    continue
                 code=cur.get('code')
                 if not code:
                     if guess is None: guess=match(it.get('name',''),cats)
@@ -155,7 +178,7 @@ def main():
                 if x: p[sid]=x; changed=True
             if changed:
                 put_doc('prices',iid,{'name':it.get('name',''),'p':p,'ex':False,'upd':now()}); updated+=1
-    errs=[f"{k}: {v['error']}" for k,v in report.items() if 'error' in v]
+    errs=[f"{k}: {v['error']}" for k,v in report.items() if k!='catalog' and 'error' in v]
     sync=get_doc('config','sync') or sync   # re-read: a refresh may have been requested meanwhile
     put_doc('config','sync',{**sync,'lastRun':now(),'status':'ok' if not errs else '; '.join(errs),'updated':updated,'stores':report})
     print('done',updated,report)

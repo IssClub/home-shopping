@@ -82,7 +82,7 @@ begin
       insert into docs(col, id, data, updated_at)
       values ('items', v_id,
         jsonb_build_object('name', left(o ->> 'name', 60), 'cat', v_cat, 'qty', v_qty, 'done', false,
-                           'ts', (extract(epoch from now()) * 1000)::bigint), now())
+                           'ts', (extract(epoch from now()) * 1000)::bigint, 'by', 'agent'), now())
       on conflict (col, id) do update
         set data = docs.data || jsonb_build_object('qty', least(99, coalesce((docs.data ->> 'qty')::int, 1) + v_qty), 'done', false),
             updated_at = now();

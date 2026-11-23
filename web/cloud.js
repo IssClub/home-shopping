@@ -117,7 +117,23 @@ function makeCloudDB(sb, opt){
   }
   function clear(){ cache = { valid: false, d: {} }; queue = []; store.del(K_CACHE); store.del(K_QUEUE) }
 
+  // חיפוש בקטלוג המוצרים (טבלת catalog): כל המילים חייבות להופיע בשם
+  async function searchCatalog(q, limit){
+    const toks = String(q || '').trim().split(/\s+/).map(t => t.replace(/[%_,()*]/g, '')).filter(t => t.length >= 2).slice(0, 5);
+    if (!toks.length) return [];
+    let r = sb.from('catalog').select('code,name,mfr,stores').limit(80);
+    for (const t of toks) r = r.ilike('name', '%' + t + '%');
+    const { data, error } = await r;
+    if (error) throw error;
+    const first = toks[0];
+    return (data || []).sort((a, b) =>
+      Object.keys(b.stores || {}).length - Object.keys(a.stores || {}).length ||
+      (b.name.indexOf(first) === 0) - (a.name.indexOf(first) === 0) ||
+      a.name.length - b.name.length).slice(0, limit || 12);
+  }
+
   return {
+    searchCatalog,
     doc: p => { const [col, id] = split(p); return {
       set: d => write(col, id, d),
       delete: () => write(col, id, null),
