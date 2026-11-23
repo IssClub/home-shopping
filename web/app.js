@@ -154,6 +154,7 @@ function relate(a,b){
   return null;
 }
 S.flip={};
+S.edit=false;S.dragging=false;S.pendingRender=false;S.order=[];try{S.order=JSON.parse(ls.get('tileOrder')||'[]')}catch(e){}
 function suggestions(){
   const all=items(),out=[];
   for(let i=0;i<all.length;i++) for(let j=i+1;j<all.length;j++){
@@ -186,7 +187,8 @@ function sugSheetHTML(){
 function sorted(list){return list.slice().sort((a,b)=>(a.done-b.done)||((a.ts||0)-(b.ts||0))||a.name.localeCompare(b.name,'he'))}
 function groups(filter){
   const g={}; for(const it of items()){ if(filter&&!filter(it)) continue; (g[it.cat in BYID?it.cat:'other']??=[]).push(it); }
-  return CATS.filter(c=>g[c.id]).map(c=>({cat:c,list:sorted(g[c.id])}));
+  const rank=id=>{const i=S.order.indexOf(id);return i>=0?i:1000+CATS.findIndex(c=>c.id===id)};   // סדר אישי של האריחים, ברירת מחדל: הסדר הקבוע
+  return CATS.filter(c=>g[c.id]).sort((a,b)=>rank(a.id)-rank(b.id)).map(c=>({cat:c,list:sorted(g[c.id])}));
 }
 function compare(scope){
   const list=items().filter(i=>scope==='all'||!i.done);
@@ -223,17 +225,16 @@ function hero(){
 }
 function tile(g,mode,sid){
   const {cat,list}=g,left=list.filter(i=>!i.done).length,done=list.length-left,complete=left===0;
-  const names=sorted(list).filter(i=>!i.done).slice(0,3).map(i=>i.name).join(', ');
+  const n=mode==='shop'?left:list.length;
   return `<button class="tile ${mode==='shop'&&complete?'complete':''}" style="--c:${cat.c}" data-act="opencat" data-id="${cat.id}" data-mode="${mode}">
-   <div class="top">${icon(cat.id)}${mode==='shop'&&complete?'<span class="donebadge">הושלם</span>':`<span class="cnt">${list.length}</span>`}</div>
+   <div class="top">${icon(cat.id)}${mode==='shop'&&complete?'<span class="donebadge">✓</span>':`<span class="big">${n}</span>`}</div>
    <div class="nm">${esc(cat.name)}</div>
-   <div class="big">${mode==='shop'?left:list.length}<small>${mode==='shop'?'נשארו':'מוצרים'}</small></div>
-   <div class="tbar"><i style="width:${Math.round(done/list.length*100)}%"></i></div>
-   <div class="prev">${esc(names||'הכול נלקח')}</div></button>`;
+   <div class="tbar"><i style="width:${Math.round(done/list.length*100)}%"></i></div></button>`;
 }
+const editBar=()=>S.edit?'<div class="editbar"><span>גררו אריח כדי לסדר מחדש</span><button class="btn small" data-act="editdone">סיום</button></div>':'';
 function viewList(){
   const gs=groups(); if(!gs.length) return emptyState();
-  return hero()+sugBanner()+`<div class="tiles">${gs.map(g=>tile(g,'list')).join('')}</div>`;
+  return hero()+sugBanner()+editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'list')).join('')}</div>`;
 }
 function viewShop(){
   const all=items(); if(!all.length) return emptyState();
@@ -246,7 +247,7 @@ function viewShop(){
   ${hero()}
   ${sid!=='all'?`<div class="panel" style="margin-top:0"><div class="stats"><b style="font:700 1.3rem var(--font-head)">${fmt(cost)}</b> <span class="note">משוער לשאר הקניות ב${esc(S.stores.find(s=>s.id===sid).name)}</span> ${miss?`<span class="tag warn">חסר מחיר ל-${miss}</span>`:''}</div></div>`:''}
   <div class="acts" style="margin-bottom:14px"><button class="btn ghost small" data-act="hidedone">${S.hideDone?'הצג מה שנלקח':'הסתר מה שנלקח'}</button>${all.some(i=>i.done)?'<button class="btn ghost small" data-act="uncheckall">אפס סימונים</button>':''}</div>
-  ${gs.length?`<div class="tiles">${gs.map(g=>tile(g,'shop',sid)).join('')}</div>`:`<div class="empty"><b>הכול נלקח</b><span>אפשר לגשת לקופה.</span></div>`}`;
+  ${gs.length?editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'shop',sid)).join('')}</div>`:`<div class="empty"><b>הכול נלקח</b><span>אפשר לגשת לקופה.</span></div>`}`;
 }
 function catSheetHTML(){
   const {id,mode}=S.cat; const cat=BYID[id]; const list=sorted(items().filter(i=>(i.cat in BYID?i.cat:'other')===id));
@@ -293,12 +294,15 @@ function viewMore(){
     ${S.stores.map(s=>`<div class="storerow"><input data-store="${s.id}" value="${esc(s.name)}" aria-label="שם סופר">${s.auto?'<span class="tag">מחירים אוטומטיים</span>':'<span class="tag warn">ידני</span>'}<button class="btn danger small" data-act="delstore" data-id="${s.id}">מחק</button></div>`).join('')}
     <div class="storerow" style="border:0"><input id="newstore" placeholder="סופר חדש" aria-label="סופר חדש"><button class="btn small" data-act="addstore">הוסף</button></div></div></section>
   <section class="panel"><h2>ניקוי</h2><div class="acts">
+    <button class="btn ghost" data-act="editstart">סידור הקטגוריות</button>
+    <button class="btn ghost" data-act="resetorder">אפס סדר</button>
     <button class="btn ghost" data-act="recat">סווג מחדש את "אחר"</button>
     <button class="btn ghost" data-act="cleardone">הסר מוצרים שנלקחו</button>
     <button class="btn danger" data-act="clearall">מחק את כל הרשימה</button></div>
     <span class="note">מחירים שנשמרו נשארים גם אחרי מחיקת מוצר.</span></section></div>`;
 }
 function render(){
+  if(S.dragging){S.pendingRender=true;return}
   updateChrome();
   const v=$('#view'); const f={list:viewList,shop:viewShop,compare:viewCompare,more:viewMore}[S.tab]||viewList;
   const keep=document.activeElement&&document.activeElement.id==='newstore'?$('#newstore').value:null;
@@ -401,7 +405,10 @@ document.addEventListener('click',e=>{
   const act=el.dataset.act,id=el.dataset.id;
   switch(act){
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
-    case 'opencat': openCat(id,el.dataset.mode); break;
+    case 'opencat': if(!S.edit) openCat(id,el.dataset.mode); break;
+    case 'editdone': S.edit=false; render(); break;
+    case 'editstart': S.tab='list'; if(location.hash!=='#list') location.hash='list'; S.edit=true; render(); window.scrollTo(0,0); break;
+    case 'resetorder': S.order=[]; ls.set('tileOrder','[]'); render(); toast('הסדר חזר לברירת המחדל'); break;
     case 'edit': editSheet(id); break;
     case 'opensug': S.sug=true; openSheet(sugSheetHTML()); break;
     case 'mergesug': mergeItems(el.dataset.a,el.dataset.b); toast('מוזג'); break;
@@ -436,7 +443,42 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&sheetOpen) closeSheet(); if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
 $('#addform').addEventListener('submit',e=>{e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
-function setTab(t){S.tab=t; if(location.hash!=='#'+t) location.hash=t; render(); window.scrollTo(0,0)}
+
+/* ---------- סידור אריחים: לחיצה ארוכה, רעידה, גרירה (כמו במסך הבית באייפון) ---------- */
+let lpTimer=null,lpStart=null;
+function saveOrder(ids){ S.order=ids.concat(S.order.filter(x=>!ids.includes(x))); ls.set('tileOrder',JSON.stringify(S.order)); }
+function startDrag(tile,e){
+  const grid=tile.parentElement,r=tile.getBoundingClientRect();
+  const ghost=tile.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('complete');
+  Object.assign(ghost.style,{width:r.width+'px',height:r.height+'px',left:r.left+'px',top:r.top+'px'});
+  document.body.appendChild(ghost); tile.classList.add('ph'); S.dragging=true;
+  const dx=e.clientX-r.left,dy=e.clientY-r.top;
+  const move=ev=>{
+    ghost.style.left=(ev.clientX-dx)+'px'; ghost.style.top=(ev.clientY-dy)+'px';
+    const over=document.elementFromPoint(ev.clientX,ev.clientY),tgt=over&&over.closest&&over.closest('.tile');
+    if(tgt&&tgt!==tile&&tgt.parentElement===grid){
+      const kids=[...grid.children]; grid.insertBefore(tile,kids.indexOf(tile)<kids.indexOf(tgt)?tgt.nextSibling:tgt);
+    }
+  };
+  const up=()=>{
+    window.removeEventListener('pointermove',move); window.removeEventListener('pointerup',up); window.removeEventListener('pointercancel',up);
+    ghost.remove(); tile.classList.remove('ph'); S.dragging=false;
+    saveOrder([...grid.children].map(c=>c.dataset.id).filter(Boolean));
+    if(S.pendingRender){S.pendingRender=false;render()}
+  };
+  window.addEventListener('pointermove',move); window.addEventListener('pointerup',up); window.addEventListener('pointercancel',up);
+}
+document.addEventListener('pointerdown',e=>{
+  const t=e.target.closest&&e.target.closest('.tile'); if(!t||!t.closest('#view')) return;
+  if(S.edit){ e.preventDefault(); startDrag(t,e); return; }
+  lpStart={x:e.clientX,y:e.clientY};
+  clearTimeout(lpTimer);
+  lpTimer=setTimeout(()=>{ lpTimer=null; S.edit=true; if(navigator.vibrate)try{navigator.vibrate(15)}catch(_){} render(); },500);
+});
+document.addEventListener('pointermove',e=>{ if(lpTimer&&lpStart&&Math.hypot(e.clientX-lpStart.x,e.clientY-lpStart.y)>8){clearTimeout(lpTimer);lpTimer=null} });
+['pointerup','pointercancel','scroll'].forEach(ev=>document.addEventListener(ev,()=>{clearTimeout(lpTimer);lpTimer=null},true));
+document.addEventListener('contextmenu',e=>{ if(e.target.closest&&e.target.closest('.tile')) e.preventDefault(); });
+function setTab(t){S.edit=false;S.tab=t; if(location.hash!=='#'+t) location.hash=t; render(); window.scrollTo(0,0)}
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(1); if(['list','shop','compare','more'].includes(t)&&t!==S.tab){S.tab=t;render()}});
 
 /* ---------- boot ---------- */
