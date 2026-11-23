@@ -16,6 +16,7 @@ create table if not exists public.ingest_seen (
   msg_id text primary key,
   at     timestamptz not null default now()
 );
+alter table public.ingest_seen add column if not exists ops jsonb;   -- הפקודות שהגיעו באותו מייל, לצורך מעקב
 alter table public.ingest_seen enable row level security;
 revoke all on public.ingest_seen from anon, authenticated;
 
@@ -42,7 +43,7 @@ begin
   if exists (select 1 from ingest_seen where msg_id = p_msg) then
     return jsonb_build_object('duplicate', true);
   end if;
-  insert into ingest_seen(msg_id) values (p_msg);
+  insert into ingest_seen(msg_id, ops) values (p_msg, p_ops);
 
   for o in select * from jsonb_array_elements(p_ops) loop
     v_id := o ->> 'id';
