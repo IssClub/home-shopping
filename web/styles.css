@@ -195,3 +195,16 @@ body::before{display:none}
 .flat .row{min-height:42px;padding:7px 14px}
 .fh{margin:10px 2px 4px!important}
 .flat .fh:first-child{margin-top:0!important}
+
+/* החלקה על פריט */
+.sw{position:relative;overflow:hidden;border-bottom:1px solid var(--line);background:var(--surface)}
+.sw:last-child{border-bottom:0}
+.sw .row{position:relative;z-index:1;border-bottom:0;touch-action:pan-y;transition:transform .22s ease;will-change:transform}
+.sw-l,.sw-r{position:absolute;top:0;bottom:0;display:flex;align-items:stretch}
+.sw-l{left:0;width:88px}
+.sw-r{right:0;width:156px}
+.sw-l button{flex:1;border:0;background:var(--danger);color:var(--accent-ink);font:700 .95rem var(--font-body)}
+.sw-r .qb{flex:1;border:0;background:var(--accent);color:var(--accent-ink);font:700 1.6rem var(--font-head)}
+.sw-r .qb:disabled{opacity:.45}
+.sw-r .qn{flex:1;display:grid;place-items:center;background:var(--surface2);font:700 1.15rem var(--font-head);font-variant-numeric:tabular-nums}
+.toast .undo{border:0;background:none;color:var(--accent);font-weight:700;margin-inline-start:10px;padding:0 4px;text-decoration:underline;pointer-events:auto}

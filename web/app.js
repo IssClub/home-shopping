@@ -261,10 +261,17 @@ function viewShop(){
   ${viewSeg()}
   ${gs.length?(S.view==='list'?flatList(gs,'shop',sid):editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'shop',sid)).join('')}</div>`):`<div class="empty"><b>הכול נלקח</b><span>אפשר לגשת לקופה.</span></div>`}`;
 }
+const SW_L=88,SW_R=156;   // רוחב כפתור המחיקה ורוחב שלושת כפתורי הכמות
 function itemRow(i,mode,sid){
-    if(mode==='shop'){const u=sid!=='all'?unit(S.prices[i.id],sid):null;
-      return `<button class="row ${i.done?'done':''}" data-act="toggle" data-id="${i.id}" aria-pressed="${!!i.done}"><span class="chk"></span><span class="tx"><span class="nm">${esc(i.name)}</span>${u&&u.note&&!i.done?`<span class="sub">${esc(u.note)}</span>`:''}</span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}${u?`<span class="pr ${u.promo?'promo':''}">${fmt(u.v)}</span>`:''}</button>`}
-    return `<button class="row ${i.done?'done':''}" data-act="edit" data-id="${i.id}"><span class="tx"><span class="nm">${esc(i.name)}</span></span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}</button>`}
+  let inner;
+  if(mode==='shop'){const u=sid!=='all'?unit(S.prices[i.id],sid):null;
+    inner=`<button class="row ${i.done?'done':''}" data-act="toggle" data-id="${i.id}" aria-pressed="${!!i.done}"><span class="chk"></span><span class="tx"><span class="nm">${esc(i.name)}</span>${u&&u.note&&!i.done?`<span class="sub">${esc(u.note)}</span>`:''}</span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}${u?`<span class="pr ${u.promo?'promo':''}">${fmt(u.v)}</span>`:''}</button>`;
+  } else inner=`<button class="row ${i.done?'done':''}" data-act="edit" data-id="${i.id}"><span class="tx"><span class="nm">${esc(i.name)}</span></span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}</button>`;
+  const q=i.qty||1,open=S.sw&&S.sw.id===i.id?S.sw.side:'';
+  const off=open==='r'?-SW_R:open==='l'?SW_L:0;
+  inner=inner.replace('<button class="row',`<button style="transform:translateX(${off}px)" class="row`);
+  return `<div class="sw" data-sw="${i.id}"><div class="sw-l"><button data-act="del" data-id="${i.id}" aria-label="מחק">מחק</button></div><div class="sw-r"><button class="qb" data-act="qminus" data-id="${i.id}" aria-label="הפחת כמות" ${q<=1?'disabled':''}>−</button><span class="qn">${q}</span><button class="qb" data-act="qplus" data-id="${i.id}" aria-label="הוסף כמות">+</button></div>${inner}</div>`;
+}
 function catSheetHTML(){
   const {id,mode}=S.cat; const cat=BYID[id]; const list=sorted(items().filter(i=>(i.cat in BYID?i.cat:'other')===id));
   const sid=S.shopStore!=='all'&&S.stores.some(s=>s.id===S.shopStore)?S.shopStore:'all';
@@ -410,7 +417,9 @@ async function refresh(){
 setInterval(updateChrome,30000);
 
 /* ---------- toast ---------- */
-let tt; function toast(m){const t=$('#toast');t.innerHTML=`<span>${esc(m)}</span>`;clearTimeout(tt);tt=setTimeout(()=>t.innerHTML='',2600)}
+let tt; function toast(m,undo){const t=$('#toast');t.innerHTML=`<span>${esc(m)}${undo?' <button class="undo">ביטול</button>':''}</span>`;
+  if(undo){const b=t.querySelector('.undo');b.onclick=()=>{undo();t.innerHTML='';clearTimeout(tt)}}
+  clearTimeout(tt);tt=setTimeout(()=>t.innerHTML='',undo?5000:2600)}
 
 /* ---------- events ---------- */
 let armed=null;
@@ -421,6 +430,11 @@ document.addEventListener('click',e=>{
   switch(act){
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
     case 'hardreload': (async()=>{try{const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){} location.reload()})(); break;
+    case 'del':{const it=S.items[id]; if(!it) break; S.sw=null;
+      const snap={name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now()};
+      write('items/'+id,null); toast(`"${it.name}" נמחק`,()=>write('items/'+id,snap)); break}
+    case 'qplus':{const it=S.items[id]; if(it){S.sw={id,side:'r'}; write('items/'+id,itemDoc(it,{qty:Math.min(99,(it.qty||1)+1)}))} break}
+    case 'qminus':{const it=S.items[id]; if(it&&(it.qty||1)>1){S.sw={id,side:'r'}; write('items/'+id,itemDoc(it,{qty:(it.qty||1)-1}))} break}
     case 'setview': S.view=id; S.edit=false; ls.set('listView',id); render(); break;
     case 'opencat': if(!S.edit) openCat(id,el.dataset.mode); break;
     case 'editdone': S.edit=false; render(); break;
@@ -460,6 +474,46 @@ document.addEventListener('change',e=>{
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&sheetOpen) closeSheet(); if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
 $('#addform').addEventListener('submit',e=>{e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
+
+
+/* ---------- החלקה על פריט: ימינה = מחיקה, שמאלה = כמות (כמו באייפון) ---------- */
+let swp=null;
+S.sw=null; S.noClickUntil=0;
+function swClose(){ if(S.sw){S.sw=null; render();} }
+document.addEventListener('pointerdown',e=>{
+  const row=e.target.closest&&e.target.closest('.sw > .row');
+  if(!row){ if(S.sw&&!(e.target.closest&&e.target.closest('.sw-l,.sw-r'))) swClose(); return; }
+  if(S.edit) return;
+  const wrap=row.parentElement,id=wrap.dataset.sw;
+  if(S.sw&&S.sw.id!==id) swClose();
+  const cur=S.sw&&S.sw.id===id?(S.sw.side==='r'?-SW_R:SW_L):0;
+  swp={row,wrap,id,x0:e.clientX,y0:e.clientY,cur,off:cur,moved:false};
+});
+document.addEventListener('pointermove',e=>{
+  if(!swp) return;
+  const dx=e.clientX-swp.x0,dy=e.clientY-swp.y0;
+  if(!swp.moved){
+    if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){swp=null;return}      // גלילה אנכית
+    if(Math.abs(dx)<8) return;
+    swp.moved=true; S.dragging=true; try{swp.row.setPointerCapture(e.pointerId)}catch(_){}
+    swp.row.style.transition='none';
+  }
+  swp.off=Math.max(-SW_R,Math.min(SW_L,swp.cur+dx));
+  swp.row.style.transform=`translateX(${swp.off}px)`;
+});
+function swEnd(){
+  if(!swp) return; const g=swp; swp=null;
+  if(!g.moved) return;
+  S.dragging=false; S.noClickUntil=Date.now()+350;
+  g.row.style.transition='';
+  const side=g.off>SW_L/2?'l':g.off<-SW_R/2?'r':'';
+  S.sw=side?{id:g.id,side}:null;
+  g.row.style.transform=`translateX(${side==='l'?SW_L:side==='r'?-SW_R:0}px)`;
+  if(S.pendingRender){S.pendingRender=false;render()}
+}
+document.addEventListener('pointerup',swEnd);
+document.addEventListener('pointercancel',swEnd);
+document.addEventListener('click',e=>{ if(Date.now()<S.noClickUntil&&e.target.closest&&e.target.closest('.sw > .row')){e.stopPropagation();e.preventDefault()} },true);
 
 /* ---------- סידור אריחים: לחיצה ארוכה, רעידה, גרירה (כמו במסך הבית באייפון) ---------- */
 let lpTimer=null,lpStart=null;
