@@ -335,29 +335,28 @@ function render(){
 
 /* ---------- sheets ---------- */
 let sheetOpen=false;
-function openSheet(html){ $('#sheetroot').innerHTML=`<div class="scrim" data-act="closesheet"><div class="sheet" role="dialog" aria-modal="true">${html}</div></div>`; sheetOpen=true; }
+function openSheet(html,cls=''){ $('#sheetroot').innerHTML=`<div class="scrim" data-act="closesheet"><div class="sheet ${cls}" role="dialog" aria-modal="true"><div class="grab" aria-hidden="true"></div>${html}</div></div>`; sheetOpen=true; }
 function closeSheet(){ const b=S.back; S.back=null; S.cat=null; S.sug=false; $('#sheetroot').innerHTML=''; sheetOpen=false; if(b){S.cat=b; openSheet(catSheetHTML());} }
 function openCat(id,mode){ S.cat={id,mode}; openSheet(catSheetHTML()); }
 function editSheet(id){
   const it=S.items[id]; if(!it) return; const pr=S.prices[id]||{p:{}};
   if(S.cat){S.back=S.cat;S.cat=null}
-  openSheet(`<h3>${esc(it.name)}</h3>
-  <div class="field"><span class="lbl">כמות</span><div class="stepper"><button type="button" data-act="qty" data-d="-1" aria-label="פחות">−</button><output id="qv">${it.qty||1}</output><button type="button" data-act="qty" data-d="1" aria-label="יותר">+</button></div></div>
-  <div class="field"><label for="ecat">קטגוריה</label><select id="ecat">${CATS.map(c=>`<option value="${c.id}" ${c.id===it.cat?'selected':''}>${esc(c.name)}</option>`).join('')}</select></div>
-  <div class="lbl">מחירים ומבצעים לפי סופר (ליחידה, בשקלים)</div>
-  ${S.stores.map(s=>{const x=(pr.p||{})[s.id]||{};const auto=x.src==='auto'&&x.pname;return `<div class="pbox" data-sid="${s.id}"><b>${esc(s.name)}</b>
-    ${auto?`<span class="note">מהאתר: ${esc(x.pname)} <span class="tag">מקוון</span></span>`:(x.src==='manual'?'<span class="note"><span class="tag warn">הוזן ידנית</span></span>':'')}
-    <div class="pgrid">
-    <div class="field"><label>מחיר רגיל</label><input inputmode="decimal" data-f="price" value="${x.price||''}" placeholder="0.00"></div>
-    <div class="field"><label>מחיר מבצע</label><input inputmode="decimal" data-f="sale" value="${x.sale||''}" placeholder="0.00"></div>
-    <div class="field full"><label>פרטי המבצע</label><input data-f="note" value="${esc(x.note||'')}" placeholder="למשל: 2 ב-10, עד 31.11"></div></div></div>`}).join('')}
-  <div class="acts"><button class="btn grow" data-act="saveitem" data-id="${id}">שמור</button><button class="btn ghost" data-act="closesheet">ביטול</button><button class="btn danger" data-act="delitem" data-id="${id}">מחק</button></div>`);
+  openSheet(`<div class="ehead"><h3>${esc(it.name)}</h3><div class="stepper sm"><button type="button" data-act="qty" data-d="-1" aria-label="פחות">−</button><output id="qv">${it.qty||1}</output><button type="button" data-act="qty" data-d="1" aria-label="יותר">+</button></div></div>
+  <select id="ecat" class="slim" aria-label="קטגוריה">${CATS.map(c=>`<option value="${c.id}" ${c.id===it.cat?'selected':''}>${esc(c.name)}</option>`).join('')}</select>
+  <div class="pcols"><span>מחירים לפי סופר, ליחידה (₪)</span><span>רגיל</span><span>מבצע</span></div>
+  ${S.stores.map(s=>{const x=(pr.p||{})[s.id]||{};const auto=x.src==='auto'&&x.pname;
+    return `<div class="prow ${(+x.sale>0||x.note)?'shownote':''}" data-sid="${s.id}"><b class="sn">${esc(s.name)}</b>
+    <input inputmode="decimal" data-f="price" value="${x.price||''}" placeholder="0.00" aria-label="מחיר רגיל ${esc(s.name)}">
+    <input inputmode="decimal" data-f="sale" value="${x.sale||''}" placeholder="0.00" aria-label="מחיר מבצע ${esc(s.name)}">
+    ${auto?`<div class="psub">מהאתר: ${esc(x.pname)}</div>`:(x.src==='manual'?'<div class="psub">הוזן ידנית</div>':'')}
+    <input class="pnote" data-f="note" value="${esc(x.note||'')}" placeholder="פרטי המבצע, למשל 2 ב-10" aria-label="פרטי מבצע ${esc(s.name)}"></div>`}).join('')}
+  <div class="acts"><button class="btn grow" data-act="saveitem" data-id="${id}">שמור</button><button class="btn ghost" data-act="closesheet">ביטול</button><button class="btn danger" data-act="delitem" data-id="${id}">מחק</button></div>`,'edit');
 }
 function saveItem(id){
   const it=S.items[id]; if(!it) return;
   const qty=Math.max(1,+$('#qv').textContent||1),cat=$('#ecat').value;
   const old=(S.prices[id]&&S.prices[id].p)||{},p={};
-  document.querySelectorAll('#sheetroot .pbox').forEach(b=>{const sid=b.dataset.sid,g=f=>b.querySelector(`[data-f=${f}]`).value.trim().replace(',','.');
+  document.querySelectorAll('#sheetroot .prow').forEach(b=>{const sid=b.dataset.sid,g=f=>b.querySelector(`[data-f=${f}]`).value.trim().replace(',','.');
     const price=parseFloat(g('price'))||0,sale=parseFloat(g('sale'))||0,note=g('note'),o=old[sid];
     if(!price&&!sale) return;
     if(o&&(+o.price||0)===price&&(+o.sale||0)===sale&&(o.note||'')===note) p[sid]=o; else p[sid]={price,sale,note,src:'manual'};});
@@ -505,6 +504,22 @@ document.addEventListener('submit',e=>{
   rows.forEach(r=>{ addItem(r.name,r.qty,cid); if(guess(r.name)!==cid) learnCat(r.name,cid); });   // בחירה ידנית של קטגוריה נלמדת
   inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus();
 });
+
+/* ---------- חלון: ידית וגרירה למטה לסגירה, והצגת פרטי מבצע כשיש מחיר מבצע ---------- */
+let gb=null;
+document.addEventListener('pointerdown',e=>{
+  const g=e.target.closest&&e.target.closest('.grab'); if(!g) return;
+  const sh=g.closest('.sheet'); gb={sh,y0:e.clientY,t0:performance.now(),dy:0}; sh.style.transition='none';
+  try{g.setPointerCapture(e.pointerId)}catch(_){}
+});
+document.addEventListener('pointermove',e=>{ if(!gb) return; gb.dy=Math.max(0,e.clientY-gb.y0); gb.sh.style.transform=`translateY(${gb.dy}px)`; });
+function gbEnd(){
+  if(!gb) return; const {sh,dy,t0}=gb; gb=null; const v=dy/Math.max(1,performance.now()-t0);
+  sh.style.transition='transform .22s ease';
+  if(dy>90||(v>.6&&dy>30)){ sh.style.transform='translateY(100%)'; setTimeout(closeSheet,180); } else sh.style.transform='';
+}
+document.addEventListener('pointerup',gbEnd); document.addEventListener('pointercancel',gbEnd);
+document.addEventListener('input',e=>{ const t=e.target; if(t&&t.dataset&&t.dataset.f==='sale'){ const r=t.closest('.prow'); if(r) r.classList.toggle('shownote',!!t.value.trim()); } });
 
 /* ---------- החלקה על פריט: ימינה = מחיקה, שמאלה = כמות (כמו באייפון) ---------- */
 let swp=null;
