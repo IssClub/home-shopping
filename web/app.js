@@ -24,30 +24,38 @@ const IC={
 };
 const icon=id=>`<span class="ico"><svg viewBox="0 0 24 24"><path d="${IC[id]||IC.other}"/></svg></span>`;
 const CATS=[
- {id:'produce',name:'ירקות ופירות',c:'#2e9e55',k:'עגבני|מלפפון|גזר|בצל|שום|תפוח|תפוז|לימון|בננ|אבוקדו|חסה|פלפל|תפוחי אדמה|בטטה|קישוא|חציל|כרוב|ברוקולי|כרובית|פטרוזיליה|כוסברה|שמיר|נענע|פטריות|ענבים|אבטיח|מלון|אפרסק|נקטרינ|שזיף|תות|אגס|קלמנטינ|אשכולית|מנגו|ירקות|פירות|סלק|דלעת|עלים|בזיליקום|תרד|קולרבי|רימון|תמר'},
+ {id:'produce',name:'ירקות ופירות',c:'#2e9e55',k:'עגבני|מלפפון|גזר|בצל|שום|תפוח|תפוז|לימון|בננ|אבוקדו|חסה|פלפל|תפוחי אדמה|בטטה|קישוא|חציל|כרוב|ברוקולי|כרובית|פטרוזיליה|כוסברה|שמיר|נענע|פטריות|ענבים|אבטיח|מלון|אפרסק|נקטרינ|שזיף|תות|אגס|קלמנטינ|אשכולית|מנגו|ירקות|פירות|סלק|דלעת|עלים|בזיליקום|תרד|קולרבי|רימון|תמר|גמב|ירק|צנון|צנונית|כרישה|סלרי|שומר|עירית|לפת|נבטים|רוקט|זנגביל|גינגר|דובדבנ|תאנ|קיווי|פומלה|אננס|ליים|מנדרינ|אפרסמון'},
  {id:'bakery',name:'לחם ומאפים',c:'#c4811a',k:'לחם|פיתה|פיתות|לחמני|חלה|חלות|בגט|טורטיה|עוגה|בורקס|מאפה|מאפים|לאפה|בייגל|קרואסון'},
  {id:'dairy',name:'חלב וביצים',c:'#3d86d6',k:'חלב|גבינ|קוטג|יוגורט|שמנת|חמאה|ביצ|מעדן|לבנה|מוצרלה|שוקו|מילקי|אשל|קממבר|פטה|ריקוטה|חמאת|משקה סויה|משקה שקדים'},
  {id:'meat',name:'בשר, עוף ודגים',c:'#d04a3f',k:'עוף|חזה|שניצל|כרעיים|כנפיים|בשר|סטייק|אנטריקוט|צלי|נקניק|קבב|המבורגר|הודו|דג|דגים|סלמון|פילה|כבד|שווארמה|פסטרמה|סלאמי|אסאדו'},
  {id:'frozen',name:'קפואים',c:'#25a8c4',k:'קפוא|קפואים|גלידה|ארטיק|בצק עלים|פיצה|מקפיא'},
- {id:'dry',name:'יבשים ותבלינים',c:'#a8742d',k:'אורז|פסטה|ספגטי|קמח|סוכר|מלח|שמן|קטשופ|מיונז|חומוס|טחינה|דגני|קורנפלקס|שיבולת|קוואקר|עדשים|שעועית|קוסקוס|פתיתים|תבלין|פפריקה|כמון|אבקת אפייה|סילאן|דבש|ריבה|חומץ|רוטב|קטניות|אגוזים|שקדים|בורגול|חרדל|קינמון|מרק|גרנולה|פירורי|אינסטנט'},
+ {id:'dry',name:'יבשים ותבלינים',c:'#a8742d',k:'אורז|פסטה|ספגטי|קמח|סוכר|מלח|שמן|קטשופ|מיונז|חומוס|טחינה|דגני|קורנפלקס|שיבולת|קוואקר|עדשים|שעועית|קוסקוס|פתיתים|תבלין|פפריקה|כמון|אבקת אפייה|סילאן|דבש|ריבה|חומץ|רוטב|קטניות|אגוזים|שקדים|בורגול|חרדל|קינמון|מרק|גרנולה|פירורי|אינסטנט|שמרים|קורנפלור|שומשום'},
  {id:'canned',name:'שימורים',c:'#8a63c9',k:'שימורי|טונה|זיתים|חמוצים|רסק|מרוסק|סרדין|תירס|אפונה|גרגירי|פטריות שימור'},
  {id:'snacks',name:'חטיפים',c:'#e08414',k:'במבה|ביסלי|חטיף|חטיפים|צ\'יפס|דוריטוס|צ\'יטוס|פופקורן|בייגלה|עוגיות|וופל|תפוצ\'יפס|קרקר|פרינגלס|אפרופו|שקדי מרק|פיצוחים|גרעינים'},
  {id:'choc',name:'שוקולדים וממתקים',c:'#a35a35',k:'שוקולד|פרה|מקופל|קליק|כיף כיף|נוטלה|ממתק|סוכריות|מסטיק|גומי|מרשמלו|קינדר|טבעות|לקקן|שוקולדים|מנטוס|טופי|חלבה'},
  {id:'drinks',name:'שתייה',c:'#2b7fd0',k:'מים|סודה|קולה|קפה|תה|מיץ|בירה|יין|וודקה|משקה|נביעות|פפסי|ספרייט|פנטה|שוופס|נסטי|אייס|נס קפה|ויסקי|עראק|מוגז|מיצים|קפסולות'},
- {id:'clean',name:'מוצרי ניקיון',c:'#1fa39a',k:'אקונומיקה|כביסה|מרכך|נוזל כלים|סבון כלים|מנקה|נייר סופג|שקיות אשפה|שקיות|ספוג|ג\'ל כלים|אבקת מדיח|טבליות|מטהר|חומר ניקוי|סנו|נייר אפייה|נייר כסף|ניילון|מגבות|מגב|מטליות|כלים חד פעמיים|פתיל'},
+ {id:'clean',name:'מוצרי ניקיון',c:'#1fa39a',k:'אקונומיקה|כביסה|מרכך|נוזל כלים|סבון כלים|מנקה|נייר סופג|שקיות אשפה|שקיות|ספוג|ג\'ל כלים|אבקת מדיח|טבליות|מטהר|חומר ניקוי|סנו|נייר אפייה|נייר כסף|ניילון|מגבות|מגב|מטליות|כלים חד פעמיים|פתיל|חד פעמי|חדפ|כוסות|כפיות|צלחות|מזלגות|קשיות|מפיות|מפית'},
  {id:'care',name:'היגיינה וטיפוח',c:'#c9459a',k:'שמפו|שיער|משחת שיניים|מברשת|סבון|דאודורנט|נייר טואלט|טישו|חיתולים|תחבושות|טמפונים|קרם|סכיני|גילוי|מגבונים|גילוח|ספוגיות|מי פה|קצף'},
  {id:'other',name:'אחר',c:'#7a8b84',k:''}
 ];
 const BYID=Object.fromEntries(CATS.map(c=>[c.id,c]));
-const MATCH_ORDER=['frozen','clean','care','choc','snacks','canned','drinks','meat','dairy','bakery','produce','dry'];
+const MATCH_ORDER=['frozen','care','clean','choc','snacks','canned','drinks','meat','dairy','bakery','dry','produce'];
 const norm=s=>String(s||'').replace(/[‎‏‪-‮]/g,'').replace(/\s+/g,' ').trim();
+const FIN={'ך':'כ','ם':'מ','ן':'נ','ף':'פ','ץ':'צ'};
+const stem=x=>norm(x).replace(/[ךםןףץ]/g,c=>FIN[c]).replace(/["'׳״`]/g,'');   // אותיות סופיות וגרשיים לא משנים את ההתאמה
+const KW={}; const kwList=id=>(KW[id]??=BYID[id].k.split('|').filter(Boolean).map(stem));
+const PRE='הו';                                                               // תחילית: "ה" (הלחם) או "ו" (וחלב)
+let CATMAP={};                                                                // תיקונים שלמדנו מהמשתמש: שם מוצר > קטגוריה
 function guess(name){
-  const n=norm(name),toks=n.split(' ');
-  for(const id of MATCH_ORDER){ for(const kw of BYID[id].k.split('|')){ if(kw.includes(' ')&&n.includes(kw)) return id; } }
-  for(const id of MATCH_ORDER){ for(const kw of BYID[id].k.split('|')){ if(!kw||kw.includes(' ')) continue;
-    if(kw.length<=2?toks.includes(kw):toks.some(t=>t.startsWith(kw)||t.startsWith('ה'+kw))) return id; } }
+  const mapped=CATMAP[stem(name)]; if(mapped&&BYID[mapped]) return mapped;
+  const n=stem(name),toks=n.split(' ').filter(Boolean);
+  for(const id of MATCH_ORDER) for(const kw of kwList(id)) if(kw.includes(' ')&&n.includes(kw)) return id;
+  const hit=(t,kw)=>{ if(t===kw) return true; if(kw.length<=2) return false; const k=(kw.length>4&&kw.endsWith('ה'))?kw.slice(0,-1):kw;   // טורטיה / טורטיות
+    return t.startsWith(k)||(PRE.includes(t[0])&&t.slice(1).startsWith(k)); };
+  for(const id of MATCH_ORDER) for(const kw of kwList(id)) if(!kw.includes(' ')&&toks.some(t=>hit(t,kw))) return id;
   return 'other';
 }
+function learnCat(name,cat){const k=stem(name); if(!k||CATMAP[k]===cat) return; CATMAP={...CATMAP,[k]:cat}; write('config/catmap',{map:CATMAP});}
 function idOf(name){let h=5381;const s=norm(name);for(let i=0;i<s.length;i++)h=((h*33)^s.charCodeAt(i))>>>0;return 'i'+h.toString(36)}
 function parseItem(raw){
   let t=norm(String(raw).replace(/^[\s\-•*·]+/,'').replace(/^\d+[.)]\s+/,'').replace(/[.;!]+$/,''));
@@ -84,11 +92,11 @@ function write(path,data){
   if(DB){ chain[path]=(chain[path]||Promise.resolve()).then(()=>(data===null?DB.doc(path).delete():DB.doc(path).set(data))).catch(()=>toast('השמירה נכשלה, נסו שוב')); return chain[path]; }
   if(col==='items'){ data===null?delete S.items[id]:S.items[id]={id,...data}; }
   else if(col==='prices'){ data===null?delete S.prices[id]:S.prices[id]={id,...data}; }
-  else if(col==='config'){ S.stores=data.list; }
+  else if(col==='config'){ if(id==='catmap') CATMAP=data.map||{}; else S.stores=data.list; }
   localSave(); render(); return Promise.resolve();
 }
-function localSave(){ if(DB) return; ls.set('shopLocal',JSON.stringify({items:S.items,prices:S.prices,stores:S.stores})); }
-function localLoad(){ try{const d=JSON.parse(ls.get('shopLocal')||'null'); if(d){S.items=d.items||{};S.prices=d.prices||{};if(d.stores)S.stores=d.stores}}catch(e){} }
+function localSave(){ if(DB) return; ls.set('shopLocal',JSON.stringify({items:S.items,prices:S.prices,stores:S.stores,catmap:CATMAP})); }
+function localLoad(){ try{const d=JSON.parse(ls.get('shopLocal')||'null'); if(d){S.items=d.items||{};S.prices=d.prices||{};if(d.stores)S.stores=d.stores;if(d.catmap)CATMAP=d.catmap}}catch(e){} }
 const saveStores=list=>write('config/stores',{list});
 
 /* ---------- data helpers ---------- */
@@ -210,6 +218,7 @@ function viewMore(){
     ${S.stores.map(s=>`<div class="storerow"><input data-store="${s.id}" value="${esc(s.name)}" aria-label="שם סופר">${s.auto?'<span class="tag">מחירים אוטומטיים</span>':'<span class="tag warn">ידני</span>'}<button class="btn danger small" data-act="delstore" data-id="${s.id}">מחק</button></div>`).join('')}
     <div class="storerow" style="border:0"><input id="newstore" placeholder="סופר חדש" aria-label="סופר חדש"><button class="btn small" data-act="addstore">הוסף</button></div></div></section>
   <section class="panel"><h2>ניקוי</h2><div class="acts">
+    <button class="btn ghost" data-act="recat">סווג מחדש את "אחר"</button>
     <button class="btn ghost" data-act="cleardone">הסר מוצרים שנלקחו</button>
     <button class="btn danger" data-act="clearall">מחק את כל הרשימה</button></div>
     <span class="note">מחירים שנשמרו נשארים גם אחרי מחיקת מוצר.</span></section></div>`;
@@ -251,6 +260,7 @@ function saveItem(id){
     if(!price&&!sale) return;
     if(o&&(+o.price||0)===price&&(+o.sale||0)===sale&&(o.note||'')===note) p[sid]=o; else p[sid]={price,sale,note,src:'manual'};});
   write('items/'+id,itemDoc(it,{qty,cat}));
+  if(cat!==it.cat) learnCat(it.name,cat);
   if(Object.keys(p).length||S.prices[id]) write('prices/'+id,{name:it.name,p,ex:false});
   closeSheet(); toast('נשמר');
 }
@@ -333,6 +343,7 @@ document.addEventListener('click',e=>{
     case 'impadd':{const rows=IMP.filter(r=>r.on); rows.forEach(r=>addItem(r.name,r.qty,r.cat)); closeSheet(); setTab('list'); toast(`נוספו ${rows.length} פריטים`); break}
     case 'addstore':{const v=norm($('#newstore').value); if(!v) return; saveStores([...S.stores,{id:'s'+Date.now().toString(36),name:v,auto:false}]); break}
     case 'delstore': if(armed===id){armed=null; saveStores(S.stores.filter(s=>s.id!==id)); toast('הסופר הוסר')} else {armed=id; el.textContent='לחצו שוב לאישור'; setTimeout(()=>{if(armed===id){armed=null;render()}},3000)} break;
+    case 'recat': {let n=0; for(const it of items()){ if(it.cat==='other'){const c=guess(it.name); if(c!=='other'){write('items/'+it.id,itemDoc(it,{cat:c}));n++}}} toast(n?`סווגו מחדש ${n} מוצרים`:'לא נמצאו התאמות חדשות'); break}
     case 'cleardone': {const d=items().filter(i=>i.done); d.forEach(i=>write('items/'+i.id,null)); toast(d.length?`הוסרו ${d.length} מוצרים`:'אין מוצרים שנלקחו'); break}
     case 'clearall': if(armed==='all'){armed=null; items().forEach(i=>write('items/'+i.id,null)); toast('הרשימה נוקתה')} else {armed='all'; el.textContent='לחצו שוב לאישור'; setTimeout(()=>{if(armed==='all'){armed=null;render()}},3000)} break;
   }
@@ -388,6 +399,7 @@ async function bootCloud(){
     unsubs.push(DB.collection('items').onSnapshot(s=>{S.items={};s.docs.forEach(d=>S.items[d.id]={id:d.id,...d.data()});S.loaded=true;clearTimeout(to);render()},fail));
     unsubs.push(DB.collection('prices').onSnapshot(s=>{S.prices={};s.docs.forEach(d=>S.prices[d.id]={id:d.id,...d.data()});render()},fail));
     unsubs.push(DB.doc('config/stores').onSnapshot(s=>{ if(s.exists){const d=s.data();if(d&&Array.isArray(d.list)){S.stores=d.list;render();return}} S.stores=DEFAULT_STORES; if(!S.seededStores){S.seededStores=true;write('config/stores',{list:DEFAULT_STORES})} render()},fail));
+    unsubs.push(DB.doc('config/catmap').onSnapshot(s=>{ CATMAP=(s.exists&&s.data()&&s.data().map)||{}; render()},fail));
     unsubs.push(DB.doc('config/sync').onSnapshot(s=>{ S.sync=s.exists?s.data():null; render()},fail));
   }
 }
