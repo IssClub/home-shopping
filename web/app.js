@@ -351,6 +351,7 @@ function updateChrome(){
   document.querySelectorAll('nav.tabs button').forEach(b=>{ if(b.dataset.tab===S.tab) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current'); });
   const left=items().filter(i=>!i.done).length; const bd=$('#leftbadge'); bd.hidden=!left; bd.textContent=left;
   $('#addform').hidden=S.tab!=='list';
+  if(S.tab!=='list'){const sg=$('#sugs'); if(sg&&sg.innerHTML) sg.innerHTML='';}   // הצעות החיפוש שייכות רק למסך הרשימה
   $('#date').textContent=new Date().toLocaleDateString('he-IL',{weekday:'long',day:'numeric',month:'long'});
   const chip=$('#syncchip'),busy=isBusy();
   chip.classList.toggle('busy',busy);
@@ -639,6 +640,7 @@ document.addEventListener('change',e=>{
   }
 });
 document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($('#dlgroot').innerHTML){S.confirmFn=null;S.addCat=null;S.catForm=null;dlgClose();return} if(sheetOpen) closeSheet(); } if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
+document.addEventListener('pointerdown',e=>{ const sg=$('#sugs'); if(sg&&sg.innerHTML&&!(e.target.closest&&e.target.closest('#sugs,#addform'))) sg.innerHTML=''; },true);
 attachSuggest($('#addin'),$('#sugs'),(row,qty)=>{ addCatalogItem(row,qty); toast('נוסף: '+cleanName(row.name)); });
 $('#addform').addEventListener('submit',e=>{ $('#sugs').innerHTML='';e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
 
@@ -805,7 +807,7 @@ document.addEventListener('pointerdown',e=>{
 document.addEventListener('pointermove',e=>{ if(lpTimer&&lpStart&&Math.hypot(e.clientX-lpStart.x,e.clientY-lpStart.y)>8){clearTimeout(lpTimer);lpTimer=null} });
 ['pointerup','pointercancel','scroll'].forEach(ev=>document.addEventListener(ev,()=>{clearTimeout(lpTimer);lpTimer=null},true));
 document.addEventListener('contextmenu',e=>{ if(e.target.closest&&e.target.closest('.tile')) e.preventDefault(); });
-function setTab(t){S.edit=false;S.tab=t; if(location.hash!=='#'+t) location.hash=t; render(); window.scrollTo(0,0)}
+function setTab(t){S.edit=false;S.tab=t; const sg=$('#sugs'); if(sg) sg.innerHTML=''; if(location.hash!=='#'+t) location.hash=t; render(); window.scrollTo(0,0)}
 window.addEventListener('hashchange',()=>{const t=location.hash.slice(1); if(['list','shop','compare','more'].includes(t)&&t!==S.tab){S.tab=t;render()}});
 
 /* ---------- boot ---------- */
