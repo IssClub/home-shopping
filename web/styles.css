@@ -263,3 +263,11 @@ select.slim{padding:9px 12px;border-radius:12px;border:1px solid var(--line);bac
 .prodbar .note{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .chips{display:flex;flex-wrap:wrap;gap:6px}
 .chip2{background:var(--accent-soft);color:var(--accent);border-radius:99px;padding:3px 11px;font-size:.85rem;font-weight:600}
+
+/* תמונות מוצר */
+.th{display:none;flex:none;width:38px;height:38px;object-fit:contain;border-radius:9px;background:#fff;border:1px solid var(--line)}
+.th.on{display:block}
+.th.md{width:46px;height:46px}
+.th.lg{width:54px;height:54px;border-radius:12px}
+.prodrow{flex-direction:row;align-items:center;gap:10px}
+.prodrow .pcol{display:flex;flex-direction:column;gap:2px;min-width:0;text-align:start}

@@ -115,6 +115,52 @@ function addItem(name,qty,cat){
   return write('items/'+id,{name:norm(name),cat:cat||guess(name),qty,done:false,ts:Date.now()});
 }
 
+/* ---------- תמונות מוצר לפי ברקוד (Open Food Facts), נטענות בדפדפן ונשמרות במכשיר ---------- */
+const IMG_K='imgCache',IMG_HIT=30*864e5,IMG_MISS=7*864e5;
+let IMGC={}; try{IMGC=JSON.parse(ls.get(IMG_K)||'{}')}catch(e){IMGC={}}
+const isEAN=c=>/^\d{8,14}$/.test(String(c||''));
+function barcodeOf(it){   // ברקוד שנבחר בקטלוג, או הקוד שההתאמה האוטומטית מצאה בחנות
+  if(!it) return ''; if(isEAN(it.bc)) return it.bc;
+  const pr=S.prices[it.id]; if(pr&&pr.p) for(const v of Object.values(pr.p)) if(v&&isEAN(v.code)) return v.code;
+  return '';
+}
+function imgCached(code){const e=IMGC[code]; if(!e) return undefined; if(Date.now()-e.t>(e.u?IMG_HIT:IMG_MISS)) return undefined; return e.u}   // '' = אין תמונה
+function saveImgCache(){ const ks=Object.keys(IMGC); if(ks.length>900){ ks.sort((a,b)=>IMGC[a].t-IMGC[b].t).slice(0,300).forEach(k=>delete IMGC[k]); } ls.set(IMG_K,JSON.stringify(IMGC)); }
+const imgQ=[],imgWait={},imgFail={}; let imgBusy=0;
+async function defaultImgFetch(code){
+  const r=await fetch(`https://world.openfoodfacts.org/api/v2/product/${code}.json?fields=image_front_small_url,image_front_url`);
+  if(r.status===404) return '';
+  if(!r.ok) throw new Error('http '+r.status);
+  const j=await r.json(), p=j&&j.product; return (p&&(p.image_front_small_url||p.image_front_url))||'';
+}
+function imgPump(){
+  while(imgBusy<3&&imgQ.length){
+    const code=imgQ.shift(); imgBusy++;
+    Promise.resolve().then(()=>(window.__imgFetch||defaultImgFetch)(code))
+      .then(u=>{IMGC[code]={u:u||'',t:Date.now()};saveImgCache()})
+      .catch(()=>{imgFail[code]=Date.now()})            // שגיאת רשת או הגבלת קצב: לא שומרים, מנסים שוב אחרי דקה
+      .finally(()=>{imgBusy--; const w=imgWait[code]||[]; delete imgWait[code]; const u=imgCached(code); w.forEach(r=>r(u)); imgPump()});
+  }
+}
+function imgGet(code){
+  return new Promise(res=>{
+    if(imgFail[code]&&Date.now()-imgFail[code]<60000) return res(undefined);
+    (imgWait[code]=imgWait[code]||[]).push(res); if(imgWait[code].length>1) return; imgQ.push(code); imgPump();
+  });
+}
+function hydrateImages(){
+  document.querySelectorAll('img[data-bc]:not([data-h])').forEach(im=>{
+    const code=im.dataset.bc; im.dataset.h='1';
+    const show=u=>{ if(!u||!im.isConnected) return; im.onload=()=>im.classList.add('on'); im.onerror=()=>im.remove(); im.src=u; };
+    const c=imgCached(code);
+    if(c!==undefined) show(c); else imgGet(code).then(show);
+  });
+}
+let hyTimer=null;
+new MutationObserver(()=>{ if(!hyTimer) hyTimer=requestAnimationFrame(()=>{hyTimer=null;hydrateImages()}) })
+  .observe(document.body,{childList:true,subtree:true});
+const thumb=(code,cls)=>code?`<img class="th ${cls||''}" data-bc="${esc(code)}" alt="" decoding="async" referrerpolicy="no-referrer"`:'';
+
 /* ---------- קטלוג מוצרים: בחירת מוצר מדויק לפי ברקוד ---------- */
 const catSearchFn=()=>(DB&&DB.searchCatalog)||window.__catalogSearch||null;   // window.__catalogSearch: לבדיקות בלבד
 const cleanName=n=>norm(String(n||'').replace(/^\*?מבצע\*?\s*/,'').replace(/\s+/g,' '));
@@ -138,7 +184,7 @@ function addCatalogItem(row,qty,cat){
 const storeLabel=sid=>{const x=S.stores.find(t=>t.id===sid);return x?x.name:sid};
 function rowHTML(r,act,extra){
   const st=Object.entries(r.stores||{}).map(([sid,v])=>`${esc(storeLabel(sid))} ${(+v.p).toFixed(2)}`).join(' · ');
-  return `<button type="button" class="prodrow" data-act="${act}" data-code="${esc(r.code)}" ${extra||''}><span class="pn">${esc(cleanName(r.name))}</span><span class="pm">${st||'אין מחיר'}</span><span class="pc">ברקוד ${esc(r.code)}</span></button>`;
+  return `<button type="button" class="prodrow" data-act="${act}" data-code="${esc(r.code)}" ${extra||''}>${thumb(r.code,'md')}<span class="pcol"><span class="pn">${esc(cleanName(r.name))}</span><span class="pm">${st||'אין מחיר'}</span><span class="pc">ברקוד ${esc(r.code)}</span></span></button>`;
 }
 let sgSeq=0;
 function attachSuggest(input,listEl,onPick){   // הצעות מהקטלוג בזמן הקלדה
@@ -367,6 +413,7 @@ function itemRow(i,mode,sid){
   } else inner=`<button class="row ${i.done?'done':''}" data-act="edit" data-id="${i.id}"><span class="tx"><span class="nm">${esc(i.name)}</span></span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}</button>`;
   const q=i.qty||1,open=S.sw&&S.sw.id===i.id?S.sw.side:'';
   const off=open==='r'?-SW_R:open==='l'?SW_L:0;
+  inner=inner.replace('<span class="tx">',thumb(barcodeOf(i))+'<span class="tx">');
   inner=inner.replace('<button class="row',`<button style="transform:translateX(${off}px)" class="row`);
   return `<div class="sw" data-sw="${i.id}"><div class="sw-l"><button data-act="del" data-id="${i.id}" aria-label="מחק"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg></button></div><div class="sw-r"><button class="qb" data-act="qminus" data-id="${i.id}" aria-label="הפחת כמות">−</button><span class="qn">${q}</span><button class="qb" data-act="qplus" data-id="${i.id}" aria-label="הוסף כמות">+</button></div>${inner}</div>`;
 }
@@ -405,7 +452,7 @@ function table(list){
 }
 function viewMore(){
   return `<div style="max-width:640px">
-  <section class="panel" style="margin-top:0"><h2>גרסת האפליקציה</h2><span class="note">אם משהו שהתעדכן לא מופיע אצלכם, לחצו כדי לטעון גרסה חדשה.</span><span class="note" id="appver"></span><div class="acts"><button class="btn ghost" data-act="hardreload">טען גרסה חדשה</button></div></section>
+  <section class="panel" style="margin-top:0"><h2>גרסת האפליקציה</h2><span class="note">אם משהו שהתעדכן לא מופיע אצלכם, לחצו כדי לטעון גרסה חדשה.</span><span class="note" id="appver"></span><span class="note">תמונות מוצרים: Open Food Facts (רישיון CC BY-SA), לפי ברקוד. אם אין תמונה, לא מוצגת.</span><div class="acts"><button class="btn ghost" data-act="hardreload">טען גרסה חדשה</button></div></section>
   <section class="panel"><h2>עדכון מחירים</h2><span class="note">המחירים והמבצעים נמשכים מדי לילה מקבצי שקיפות המחירים של הרשתות, לסניפים שהגדרתם. ${S.sync&&S.sync.lastRun?'עודכן '+ago(S.sync.lastRun)+'.':''} ${S.sync&&S.sync.status&&S.sync.status!=='ok'?'<br>הודעה אחרונה: '+esc(S.sync.status):''}</span>
    <div class="acts"><button class="btn" data-act="refresh" ${DB?'':'disabled'}>רענן עכשיו</button></div></section>
   <section class="panel"><h2>ייבוא מווטסאפ</h2><span class="note">הדביקו את הרשימה מהקבוצה, או העלו קובץ ייצוא של השיחה. המערכת מסננת הודעות מערכת, מזהה כמויות ומסווגת לקטגוריות.</span><div class="acts"><button class="btn" data-act="import">פתח ייבוא</button></div></section>
@@ -441,7 +488,7 @@ function openCat(id,mode){ S.cat={id,mode}; openSheet(catSheetHTML()); }
 function editSheet(id){
   const it=S.items[id]; if(!it) return; const pr=S.prices[id]||{p:{}};
   if(S.cat){S.back=S.cat;S.cat=null}
-  openSheet(`<div class="ehead"><h3>${esc(it.name)}</h3><div class="stepper sm"><button type="button" data-act="qty" data-d="-1" aria-label="פחות">−</button><output id="qv">${it.qty||1}</output><button type="button" data-act="qty" data-d="1" aria-label="יותר">+</button></div></div>
+  openSheet(`<div class="ehead">${thumb(barcodeOf(it),'lg')}<h3>${esc(it.name)}</h3><div class="stepper sm"><button type="button" data-act="qty" data-d="-1" aria-label="פחות">−</button><output id="qv">${it.qty||1}</output><button type="button" data-act="qty" data-d="1" aria-label="יותר">+</button></div></div>
   ${catSearchFn()?`<div class="prodbar"><span class="note" id="prodline">${it.bc?'מוצר נבחר: '+esc(it.bn||it.bc):'התאמה אוטומטית לפי שם'}</span><button class="btn ghost small" data-act="pickprod" data-id="${id}">בחר מוצר</button><button class="btn ghost small" id="clearprod" data-act="clearprod" data-id="${id}" ${it.bc?'':'hidden'}>בטל</button></div>`:''}
   <select id="ecat" class="slim" aria-label="קטגוריה" data-prev="${it.cat}">${CATS.map(c=>`<option value="${c.id}" ${c.id===it.cat?'selected':''}>${esc(c.name)}</option>`).join('')}<option value="__new__">+ קטגוריה חדשה…</option></select>
   <div class="pcols"><span>מחירים לפי סופר, ליחידה (₪)</span><span>רגיל</span><span>מבצע</span></div>
