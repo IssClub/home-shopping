@@ -272,7 +272,7 @@ function viewCompare(){
   const splitSave=best.missing===0&&split.missing.length===0?best.total-split.total:0;
   return seg+`<div class="winner"><span class="k">הסל הכי משתלם</span><span class="v">${fmt(best.total)}</span>
     <span class="s">ב${esc(best.st.name)}${diff>0.005?` · חוסכים ${fmt(diff)} לעומת ${esc(worst.st.name)}`:''}${best.promos?` · ${best.promos} מוצרים במבצע`:''}${best.missing?` · חסר מחיר ל-${best.missing} מוצרים`:''}</span></div>
-  <div class="tiles" style="margin-bottom:14px">${stores.map(s=>`<div class="stile ${s===best?'best':''}"><span class="nm">${esc(s.st.name)}</span><span class="t">${s.total?fmt(s.total):'—'}</span>
+  <div class="tiles" style="margin-bottom:14px">${stores.map(s=>`<div class="stile ${s===best?'best':''}"><span class="nm">${esc(s.st.name)}</span><span class="t">${s.total?`<bdi>${s.total.toFixed(2)}</bdi><small>₪</small>`:'—'}</span>
     <div class="tags">${s===best?'<span class="tag">הכי זול</span>':''}${s.promos?`<span class="tag promo">${s.promos} במבצע</span>`:''}${s.missing?`<span class="tag warn">חסר מחיר ל-${s.missing}</span>`:''}${s.st.auto===false&&!s.total?'<span class="tag warn">הזנה ידנית</span>':''}</div></div>`).join('')}</div>
   ${splitSave>0.5?`<div class="panel"><h3>קנייה מפוצלת בין הסופרים: ${fmt(split.total)} <span class="tag">חוסכת עוד ${fmt(splitSave)}</span></h3>
     <span class="note">שווה רק אם לא מפריע לכם לעבור בין כמה חנויות.</span>
@@ -281,8 +281,8 @@ function viewCompare(){
 }
 function table(list){
   const rows=sorted(list).map(it=>{const us=S.stores.map(s=>unit(S.prices[it.id],s.id));const vals=us.filter(Boolean).map(u=>u.v);const mn=vals.length?Math.min(...vals):null;
-    return `<tr data-act="edit" data-id="${it.id}"><td>${esc(it.name)}${it.qty>1?` <span class="qty">×${it.qty}</span>`:''}</td>${us.map(u=>u?`<td class="${u.v===mn&&vals.length>1?'best':''}">${u.promo?`<span class="p">${fmt(u.v)}</span>`:fmt(u.v)}</td>`:'<td style="color:var(--muted)">—</td>').join('')}</tr>`}).join('');
-  return `<h2 class="sec">מחיר ליחידה לפי סופר</h2><div class="tbl-wrap"><table><thead><tr><th>מוצר</th>${S.stores.map(s=>`<th>${esc(s.name)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
+    return `<tr data-act="edit" data-id="${it.id}"><td>${esc(it.name)}${it.qty>1?` <span class="qty">×${it.qty}</span>`:''}</td>${us.map(u=>u?`<td class="${u.v===mn&&vals.length>1?'best':''}">${u.promo?`<span class="p">${u.v.toFixed(2)}</span>`:u.v.toFixed(2)}</td>`:'<td style="color:var(--muted)">—</td>').join('')}</tr>`}).join('');
+  return `<h2 class="sec">מחיר ליחידה לפי סופר (₪)</h2><div class="tbl-wrap"><table><thead><tr><th>מוצר</th>${S.stores.map(s=>`<th>${esc(s.name)}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table></div>
   <p class="note">מחיר בכתום הוא מחיר מבצע, בירוק הזול ביותר בשורה. מבצעי כמות (למשל 3 ב-10) מחושבים כמחיר ליחידה כשקונים את הכמות המלאה. לחצו על שורה כדי לראות את המוצר שנבחר ולעדכן.</p>`;
 }
 function viewMore(){

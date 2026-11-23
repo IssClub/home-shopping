@@ -117,11 +117,14 @@ h1{font:700 1.6rem/1.1 var(--font-head);margin:0}
 /* compare */
 .winner{background:linear-gradient(135deg,var(--hero-a),var(--hero-b));color:#fff;border-radius:26px;padding:20px;margin-bottom:14px;display:flex;flex-direction:column;gap:4px;box-shadow:var(--shadow)}
 .winner .k{font-size:.85rem;opacity:.9;font-weight:500}
-.winner .v{font:700 2.3rem/1.1 var(--font-head);font-variant-numeric:tabular-nums}
+.winner .v{font:700 2rem/1.1 var(--font-head);font-variant-numeric:tabular-nums}
 .winner .s{font-size:.95rem;opacity:.95}
-.stile{background:var(--surface);border:1px solid var(--line);border-radius:22px;padding:14px;display:flex;flex-direction:column;gap:6px;min-width:0;box-shadow:var(--shadow)}
-.stile .nm{font:600 .95rem var(--font-head)}
-.stile .t{font:700 1.7rem/1.1 var(--font-head);font-variant-numeric:tabular-nums}
+
+.stile{background:var(--surface);border:1px solid var(--line);border-radius:18px;padding:11px 10px;display:flex;flex-direction:column;gap:5px;min-width:0;box-shadow:var(--shadow)}
+.stile .nm{font:600 .82rem/1.25 var(--font-head);min-height:2.5em;overflow-wrap:anywhere}
+.stile .t{font:700 1.3rem/1.1 var(--font-head);font-variant-numeric:tabular-nums;white-space:nowrap;display:flex;align-items:baseline;gap:3px}
+.stile .t small{font:500 .75rem var(--font-body);color:var(--muted)}
+.stile .tags .tag{font-size:.7rem;padding:1px 6px}
 .stile.best{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft),var(--shadow)}
 .tags{display:flex;gap:6px;flex-wrap:wrap}
 .tag{display:inline-block;border-radius:8px;padding:2px 8px;font-size:.76rem;font-weight:700;background:var(--accent-soft);color:var(--accent)}
@@ -131,8 +134,8 @@ h1{font:700 1.6rem/1.1 var(--font-head);margin:0}
 .panel h3,.panel h2{margin:0;font:600 1.05rem var(--font-head)}
 .panel ul{margin:4px 0 0;padding-inline-start:20px;color:var(--muted);font-size:.9rem}
 .tbl-wrap{overflow-x:auto;border-radius:20px;border:1px solid var(--line);background:var(--surface)}
-table{border-collapse:collapse;width:100%;min-width:420px}
-th,td{padding:11px 12px;text-align:start;border-bottom:1px solid var(--line);font-size:.92rem;font-variant-numeric:tabular-nums}
+table{border-collapse:collapse;width:100%;min-width:0}
+th,td{padding:10px 8px;text-align:start;border-bottom:1px solid var(--line);font-size:.92rem;font-variant-numeric:tabular-nums}
 th{font:600 .82rem var(--font-head);color:var(--muted)}
 tr:last-child td{border-bottom:0}
 tbody tr{cursor:pointer}tbody tr:hover{background:var(--surface2)}
