@@ -13,7 +13,7 @@ var SUBJECT_PREFIX = 'SHOP-LIST';
 var LABEL = 'shop-ingested';
 var CATS = ['produce','bakery','dairy','meat','frozen','dry','canned','snacks','choc','drinks','clean','care','other'];
 
-function norm_(s) { return String(s || '').replace(/[‎‏‪-‮]/g, '').replace(/\s+/g, ' ').trim(); }
+function norm_(s) { return String(s || '').replace(/[\u200e\u200f\u202a-\u202e]/g, '').replace(/\s+/g, ' ').trim(); }
 // זהה ל-idOf באפליקציה, כדי שאותו מוצר ייקלט כפריט אחד
 function idOf_(name) {
   var h = 5381, s = norm_(name);
