@@ -232,9 +232,20 @@ function tile(g,mode,sid){
    <div class="tbar"><i style="width:${Math.round(done/list.length*100)}%"></i></div></button>`;
 }
 const editBar=()=>S.edit?'<div class="editbar"><span>גררו אריח כדי לסדר מחדש</span><button class="btn small" data-act="editdone">סיום</button></div>':'';
+
+/* ---------- תצוגה: אריחים או רשימה אחת ---------- */
+S.view=(ls.get('listView')==='list')?'list':'tiles';
+const viewSeg=()=>`<div class="seg" role="group" aria-label="תצוגה"><button aria-pressed="${S.view==='tiles'}" data-act="setview" data-id="tiles">אריחים</button><button aria-pressed="${S.view==='list'}" data-act="setview" data-id="list">רשימה</button></div>`;
+function flatList(gs,mode,sid){
+  return `<div class="flat">${gs.map(({cat,list})=>{
+    const rows=list.filter(i=>!(mode==='shop'&&S.hideDone&&i.done)).map(i=>itemRow(i,mode,sid)).join('');
+    if(!rows) return '';
+    const left=list.filter(i=>!i.done).length;
+    return `<div class="fh" style="--c:${cat.c}"><span class="dot"></span><span>${esc(cat.name)}</span><span class="fn">${mode==='shop'?left+'/'+list.length:list.length}</span></div><div class="rows">${rows}</div>`}).join('')}</div>`;
+}
 function viewList(){
   const gs=groups(); if(!gs.length) return emptyState();
-  return hero()+sugBanner()+editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'list')).join('')}</div>`;
+  return hero()+sugBanner()+viewSeg()+(S.view==='list'?flatList(gs,'list','all'):editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'list')).join('')}</div>`);
 }
 function viewShop(){
   const all=items(); if(!all.length) return emptyState();
@@ -247,16 +258,18 @@ function viewShop(){
   ${hero()}
   ${sid!=='all'?`<div class="panel" style="margin-top:0"><div class="stats"><b style="font:700 1.3rem var(--font-head)">${fmt(cost)}</b> <span class="note">משוער לשאר הקניות ב${esc(S.stores.find(s=>s.id===sid).name)}</span> ${miss?`<span class="tag warn">חסר מחיר ל-${miss}</span>`:''}</div></div>`:''}
   <div class="acts" style="margin-bottom:14px"><button class="btn ghost small" data-act="hidedone">${S.hideDone?'הצג מה שנלקח':'הסתר מה שנלקח'}</button>${all.some(i=>i.done)?'<button class="btn ghost small" data-act="uncheckall">אפס סימונים</button>':''}</div>
-  ${gs.length?editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'shop',sid)).join('')}</div>`:`<div class="empty"><b>הכול נלקח</b><span>אפשר לגשת לקופה.</span></div>`}`;
+  ${viewSeg()}
+  ${gs.length?(S.view==='list'?flatList(gs,'shop',sid):editBar()+`<div class="tiles${S.edit?' editing':''}">${gs.map(g=>tile(g,'shop',sid)).join('')}</div>`):`<div class="empty"><b>הכול נלקח</b><span>אפשר לגשת לקופה.</span></div>`}`;
 }
+function itemRow(i,mode,sid){
+    if(mode==='shop'){const u=sid!=='all'?unit(S.prices[i.id],sid):null;
+      return `<button class="row ${i.done?'done':''}" data-act="toggle" data-id="${i.id}" aria-pressed="${!!i.done}"><span class="chk"></span><span class="tx"><span class="nm">${esc(i.name)}</span>${u&&u.note&&!i.done?`<span class="sub">${esc(u.note)}</span>`:''}</span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}${u?`<span class="pr ${u.promo?'promo':''}">${fmt(u.v)}</span>`:''}</button>`}
+    return `<button class="row ${i.done?'done':''}" data-act="edit" data-id="${i.id}"><span class="tx"><span class="nm">${esc(i.name)}</span></span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}</button>`}
 function catSheetHTML(){
   const {id,mode}=S.cat; const cat=BYID[id]; const list=sorted(items().filter(i=>(i.cat in BYID?i.cat:'other')===id));
   const sid=S.shopStore!=='all'&&S.stores.some(s=>s.id===S.shopStore)?S.shopStore:'all';
   const left=list.filter(i=>!i.done).length;
-  const rows=list.filter(i=>!(mode==='shop'&&S.hideDone&&i.done)).map(i=>{
-    if(mode==='shop'){const u=sid!=='all'?unit(S.prices[i.id],sid):null;
-      return `<button class="row ${i.done?'done':''}" data-act="toggle" data-id="${i.id}" aria-pressed="${!!i.done}"><span class="chk"></span><span class="tx"><span class="nm">${esc(i.name)}</span>${u&&u.note&&!i.done?`<span class="sub">${esc(u.note)}</span>`:''}</span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}${u?`<span class="pr ${u.promo?'promo':''}">${fmt(u.v)}</span>`:''}</button>`}
-    return `<button class="row ${i.done?'done':''}" data-act="edit" data-id="${i.id}"><span class="tx"><span class="nm">${esc(i.name)}</span></span>${i.qty>1?`<span class="qty">×${i.qty}</span>`:''}</button>`}).join('');
+  const rows=list.filter(i=>!(mode==='shop'&&S.hideDone&&i.done)).map(i=>itemRow(i,mode,sid)).join('');
   return `<div class="shead" style="--c:${cat.c}">${icon(cat.id)}<div style="flex:1;min-width:0"><h3>${esc(cat.name)}</h3><span class="note">${mode==='shop'?`${left} נשארו מתוך ${list.length}`:`${list.length} מוצרים`}</span></div><button class="btn ghost small" data-act="closesheet">סגור</button></div>
   <div class="rows">${rows||'<div class="empty" style="border:0">אין מוצרים להצגה</div>'}</div>`;
 }
@@ -405,6 +418,7 @@ document.addEventListener('click',e=>{
   const act=el.dataset.act,id=el.dataset.id;
   switch(act){
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
+    case 'setview': S.view=id; S.edit=false; ls.set('listView',id); render(); break;
     case 'opencat': if(!S.edit) openCat(id,el.dataset.mode); break;
     case 'editdone': S.edit=false; render(); break;
     case 'editstart': S.tab='list'; if(location.hash!=='#list') location.hash='list'; S.edit=true; render(); window.scrollTo(0,0); break;
