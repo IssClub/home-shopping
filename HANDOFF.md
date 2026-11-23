@@ -22,6 +22,12 @@
 - התקנה בנייד כאפליקציה ועדכון גרסה דרך ה-service worker.
 - כפתור "רענון מחירים" מהאפליקציה עד הריצה ב-GitHub.
 
+## Instinct: עדכון הרשימה מוואטסאפ (נכתב, עוד לא הוקם)
+- זרימה: כתיבה ל-Instinct בוואטסאפ, מייל `SHOP-LIST` לתיבה הייעודית של WEBTOP, סקריפט Apps Script נפרד (כל 10 דקות), פונקציית `shop_ingest` ב-Supabase, והרשימה מתעדכנת בזמן אמת.
+- קבצים: `supabase/shop_ingest.sql`, `integrations/instinct-shopping-bridge.gs`, `integrations/instinct-shopping-setup.md` (פורמט, פרומפט ל-Instinct, הוראות הקמה).
+- נבדק: הפונקציה ב-Postgres מקומי (הוספה, איחוד כמויות, סימון לפי שם, הסרה, כפילות, סוד שגוי, חסימת קריאת הסוד). פענוח המייל והמזהים זהים לאפליקציה.
+- לא נבדק: הרצה ב-Supabase האמיתי, Apps Script מול Gmail, Instinct עצמו.
+
 ## מבנה הקוד
 - `web/` האפליקציה, HTML/JS סטטי בלי build.
   - `app.js` ממשק ולוגיקה. החיבור לשרת בסוף הקובץ (`bootCloud`).
