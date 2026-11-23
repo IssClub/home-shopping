@@ -49,18 +49,18 @@ function run() {
   var key = p.getProperty('KEY'), sender = p.getProperty('SENDER');
   if (!key || !sender) throw new Error('חסרים KEY או SENDER ב-Script Properties');
   var label = GmailApp.getUserLabelByName(LABEL) || GmailApp.createLabel(LABEL);
-  var threads = GmailApp.search('subject:"' + SUBJECT_PREFIX + '" from:' + sender + ' is:unread -label:' + LABEL, 0, 20);
+  var threads = GmailApp.search('subject:"' + SUBJECT_PREFIX + '" from:' + sender + ' is:unread', 0, 20);   // כפילויות נחסמות ב-Supabase לפי מזהה המייל
   threads.forEach(function (t) {
+    var handled = false;
     t.getMessages().forEach(function (msg) {
       if (!msg.isUnread()) return;
-      if (msg.getFrom().indexOf(sender) < 0) return;           // רק מהשולח הנכון
+      if (msg.getFrom().toLowerCase().indexOf(sender.toLowerCase()) < 0) return;   // רק מהשולח הנכון
       var res = parseBody_(msg.getPlainBody(), key);
-      if (!res.ok) { Logger.log('מייל נדחה: ' + res.error); msg.markRead(); return; }
-      if (!res.ops.length) { msg.markRead(); return; }
-      var ok = post_(msg.getId(), res.ops);
-      if (ok) msg.markRead();                                   // כישלון: נשאר לא נקרא וינסה שוב
+      if (!res.ok) { Logger.log('מייל נדחה: ' + res.error + ' | נושא: ' + msg.getSubject()); msg.markRead(); return; }
+      if (!res.ops.length) { Logger.log('אין פקודות במייל: ' + msg.getSubject()); msg.markRead(); return; }
+      if (post_(msg.getId(), res.ops)) { msg.markRead(); handled = true; }   // כישלון: נשאר לא נקרא וינסה שוב
     });
-    t.addLabel(label);
+    if (handled) t.addLabel(label);
   });
 }
 
