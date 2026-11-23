@@ -300,7 +300,8 @@ function table(list){
 }
 function viewMore(){
   return `<div style="max-width:640px">
-  <section class="panel" style="margin-top:0"><h2>עדכון מחירים</h2><span class="note">המחירים והמבצעים נמשכים מדי לילה מקבצי שקיפות המחירים של הרשתות, לסניפים שהגדרתם. ${S.sync&&S.sync.lastRun?'עודכן '+ago(S.sync.lastRun)+'.':''} ${S.sync&&S.sync.status&&S.sync.status!=='ok'?'<br>הודעה אחרונה: '+esc(S.sync.status):''}</span>
+  <section class="panel" style="margin-top:0"><h2>גרסת האפליקציה</h2><span class="note">אם משהו שהתעדכן לא מופיע אצלכם, לחצו כדי לטעון גרסה חדשה.</span><span class="note" id="appver"></span><div class="acts"><button class="btn ghost" data-act="hardreload">טען גרסה חדשה</button></div></section>
+  <section class="panel"><h2>עדכון מחירים</h2><span class="note">המחירים והמבצעים נמשכים מדי לילה מקבצי שקיפות המחירים של הרשתות, לסניפים שהגדרתם. ${S.sync&&S.sync.lastRun?'עודכן '+ago(S.sync.lastRun)+'.':''} ${S.sync&&S.sync.status&&S.sync.status!=='ok'?'<br>הודעה אחרונה: '+esc(S.sync.status):''}</span>
    <div class="acts"><button class="btn" data-act="refresh" ${DB?'':'disabled'}>רענן עכשיו</button></div></section>
   <section class="panel"><h2>ייבוא מווטסאפ</h2><span class="note">הדביקו את הרשימה מהקבוצה, או העלו קובץ ייצוא של השיחה. המערכת מסננת הודעות מערכת, מזהה כמויות ומסווגת לקטגוריות.</span><div class="acts"><button class="btn" data-act="import">פתח ייבוא</button></div></section>
   <section class="panel"><h2>הסופרים שלכם</h2><div class="stack">
@@ -319,7 +320,8 @@ function render(){
   updateChrome();
   const v=$('#view'); const f={list:viewList,shop:viewShop,compare:viewCompare,more:viewMore}[S.tab]||viewList;
   const keep=document.activeElement&&document.activeElement.id==='newstore'?$('#newstore').value:null;
-  v.innerHTML=f(); if(keep!==null&&$('#newstore'))$('#newstore').value=keep;
+  v.innerHTML=f(); if(S.tab==='more'&&window.caches){caches.keys().then(k=>{const e=$('#appver');if(e)e.textContent='גרסה: '+(k.sort().pop()||'—')}).catch(()=>{})}
+  if(keep!==null&&$('#newstore'))$('#newstore').value=keep;
   if(S.cat&&sheetOpen){const sh=$('#sheetroot .sheet');if(sh){const t=sh.scrollTop;sh.innerHTML=catSheetHTML();sh.scrollTop=t}}
   if(S.sug&&sheetOpen){const sh=$('#sheetroot .sheet');if(sh){const t=sh.scrollTop;sh.innerHTML=sugSheetHTML();sh.scrollTop=t}}
 }
@@ -418,6 +420,7 @@ document.addEventListener('click',e=>{
   const act=el.dataset.act,id=el.dataset.id;
   switch(act){
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
+    case 'hardreload': (async()=>{try{const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){} location.reload()})(); break;
     case 'setview': S.view=id; S.edit=false; ls.set('listView',id); render(); break;
     case 'opencat': if(!S.edit) openCat(id,el.dataset.mode); break;
     case 'editdone': S.edit=false; render(); break;
