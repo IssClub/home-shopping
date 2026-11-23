@@ -208,3 +208,11 @@ body::before{display:none}
 .sw-r .qb:disabled{opacity:.45}
 .sw-r .qn{flex:1;display:grid;place-items:center;background:var(--surface2);font:700 1.15rem var(--font-head);font-variant-numeric:tabular-nums}
 .toast .undo{border:0;background:none;color:var(--accent);font-weight:700;margin-inline-start:10px;padding:0 4px;text-decoration:underline;pointer-events:auto}
+
+.sw-l button{display:grid;place-items:center}
+.plusbtn{flex:none;width:34px;height:34px;border-radius:50%;border:0;background:var(--accent);color:var(--accent-ink);font:700 1.5rem/1 var(--font-head);display:grid;place-items:center;padding:0 0 3px}
+.fh .plusbtn{width:28px;height:28px;font-size:1.25rem;margin-inline-start:6px}
+.fh .fn{margin-inline-start:auto}
+.scrim.dlg{z-index:60;align-items:center;padding:20px}
+.sheet.dlgbox{max-width:380px;border-radius:24px;max-height:none}
+.btn.danger-solid{background:var(--danger);color:var(--accent-ink)}

@@ -241,7 +241,7 @@ function flatList(gs,mode,sid){
     const rows=list.filter(i=>!(mode==='shop'&&S.hideDone&&i.done)).map(i=>itemRow(i,mode,sid)).join('');
     if(!rows) return '';
     const left=list.filter(i=>!i.done).length;
-    return `<div class="fh" style="--c:${cat.c}"><span class="dot"></span><span>${esc(cat.name)}</span><span class="fn">${mode==='shop'?left+'/'+list.length:list.length}</span></div><div class="rows">${rows}</div>`}).join('')}</div>`;
+    return `<div class="fh" style="--c:${cat.c}"><span class="dot"></span><span>${esc(cat.name)}</span><span class="fn">${mode==='shop'?left+'/'+list.length:list.length}</span><button class="plusbtn" data-act="addcat" data-cat="${cat.id}" aria-label="הוסף מוצר לקטגוריה">+</button></div><div class="rows">${rows}</div>`}).join('')}</div>`;
 }
 function viewList(){
   const gs=groups(); if(!gs.length) return emptyState();
@@ -270,14 +270,14 @@ function itemRow(i,mode,sid){
   const q=i.qty||1,open=S.sw&&S.sw.id===i.id?S.sw.side:'';
   const off=open==='r'?-SW_R:open==='l'?SW_L:0;
   inner=inner.replace('<button class="row',`<button style="transform:translateX(${off}px)" class="row`);
-  return `<div class="sw" data-sw="${i.id}"><div class="sw-l"><button data-act="del" data-id="${i.id}" aria-label="מחק">מחק</button></div><div class="sw-r"><button class="qb" data-act="qminus" data-id="${i.id}" aria-label="הפחת כמות" ${q<=1?'disabled':''}>−</button><span class="qn">${q}</span><button class="qb" data-act="qplus" data-id="${i.id}" aria-label="הוסף כמות">+</button></div>${inner}</div>`;
+  return `<div class="sw" data-sw="${i.id}"><div class="sw-l"><button data-act="del" data-id="${i.id}" aria-label="מחק"><svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M6 6l1 14h10l1-14M10 10v7M14 10v7"/></svg></button></div><div class="sw-r"><button class="qb" data-act="qminus" data-id="${i.id}" aria-label="הפחת כמות">−</button><span class="qn">${q}</span><button class="qb" data-act="qplus" data-id="${i.id}" aria-label="הוסף כמות">+</button></div>${inner}</div>`;
 }
 function catSheetHTML(){
   const {id,mode}=S.cat; const cat=BYID[id]; const list=sorted(items().filter(i=>(i.cat in BYID?i.cat:'other')===id));
   const sid=S.shopStore!=='all'&&S.stores.some(s=>s.id===S.shopStore)?S.shopStore:'all';
   const left=list.filter(i=>!i.done).length;
   const rows=list.filter(i=>!(mode==='shop'&&S.hideDone&&i.done)).map(i=>itemRow(i,mode,sid)).join('');
-  return `<div class="shead" style="--c:${cat.c}">${icon(cat.id)}<div style="flex:1;min-width:0"><h3>${esc(cat.name)}</h3><span class="note">${mode==='shop'?`${left} נשארו מתוך ${list.length}`:`${list.length} מוצרים`}</span></div><button class="btn ghost small" data-act="closesheet">סגור</button></div>
+  return `<div class="shead" style="--c:${cat.c}">${icon(cat.id)}<div style="flex:1;min-width:0"><h3>${esc(cat.name)}</h3><span class="note">${mode==='shop'?`${left} נשארו מתוך ${list.length}`:`${list.length} מוצרים`}</span></div><button class="plusbtn" data-act="addcat" data-cat="${cat.id}" aria-label="הוסף מוצר לקטגוריה">+</button><button class="btn ghost small" data-act="closesheet">סגור</button></div>
   <div class="rows">${rows||'<div class="empty" style="border:0">אין מוצרים להצגה</div>'}</div>`;
 }
 function viewCompare(){
@@ -430,11 +430,15 @@ document.addEventListener('click',e=>{
   switch(act){
     case 'closesheet': if(!el.classList.contains('scrim')||e.target===el) closeSheet(); break;
     case 'hardreload': (async()=>{try{const rs=await navigator.serviceWorker.getRegistrations();await Promise.all(rs.map(r=>r.unregister()));const ks=await caches.keys();await Promise.all(ks.map(k=>caches.delete(k)))}catch(e){} location.reload()})(); break;
-    case 'del':{const it=S.items[id]; if(!it) break; S.sw=null;
-      const snap={name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now()};
-      write('items/'+id,null); toast(`"${it.name}" נמחק`,()=>write('items/'+id,snap)); break}
+    case 'del': deleteItem(id); break;
     case 'qplus':{const it=S.items[id]; if(it){S.sw={id,side:'r'}; write('items/'+id,itemDoc(it,{qty:Math.min(99,(it.qty||1)+1)}))} break}
-    case 'qminus':{const it=S.items[id]; if(it&&(it.qty||1)>1){S.sw={id,side:'r'}; write('items/'+id,itemDoc(it,{qty:(it.qty||1)-1}))} break}
+    case 'qminus':{const it=S.items[id]; if(!it) break;
+      if((it.qty||1)>1){S.sw={id,side:'r'}; write('items/'+id,itemDoc(it,{qty:(it.qty||1)-1}))}
+      else askConfirm(`האם ברצונך להסיר את המוצר "${it.name}" מהרשימה?`,'הסר',()=>deleteItem(id));
+      break}
+    case 'dlgok':{const f=S.confirmFn; S.confirmFn=null; dlgClose(); if(f) f(); break}
+    case 'dlgclose': if(!el.classList.contains('scrim')||e.target===el){S.confirmFn=null;S.addCat=null;dlgClose()} break;
+    case 'addcat': addDlg(el.dataset.cat); break;
     case 'setview': S.view=id; S.edit=false; ls.set('listView',id); render(); break;
     case 'opencat': if(!S.edit) openCat(id,el.dataset.mode); break;
     case 'editdone': S.edit=false; render(); break;
@@ -472,9 +476,35 @@ document.addEventListener('change',e=>{
   if(t.dataset&&t.dataset.i!==undefined){IMP[+t.dataset.i].on=t.checked; impRender()}
   if(t.dataset&&t.dataset.ci!==undefined){IMP[+t.dataset.ci].cat=t.value}
 });
-document.addEventListener('keydown',e=>{ if(e.key==='Escape'&&sheetOpen) closeSheet(); if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
+document.addEventListener('keydown',e=>{ if(e.key==='Escape'){ if($('#dlgroot').innerHTML){S.confirmFn=null;S.addCat=null;dlgClose();return} if(sheetOpen) closeSheet(); } if(e.key==='Enter'&&e.target.id==='newstore') document.querySelector('[data-act=addstore]').click(); });
 $('#addform').addEventListener('submit',e=>{e.preventDefault(); const inp=$('#addin'); const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length) return; rows.forEach(r=>addItem(r.name,r.qty)); inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus()});
 
+
+/* ---------- מחיקה, חלונות אישור והוספה לקטגוריה ---------- */
+function deleteItem(id){
+  const it=S.items[id]; if(!it) return; S.sw=null;
+  const snap={name:it.name,cat:it.cat,qty:it.qty||1,done:!!it.done,ts:it.ts||Date.now()};
+  write('items/'+id,null); toast(`"${it.name}" נמחק`,()=>write('items/'+id,snap));
+}
+function dlg(html){ $('#dlgroot').innerHTML=`<div class="scrim dlg" data-act="dlgclose"><div class="sheet dlgbox" role="dialog" aria-modal="true">${html}</div></div>`; }
+function dlgClose(){ $('#dlgroot').innerHTML=''; }
+function askConfirm(text,okLabel,onOk){
+  S.confirmFn=onOk;
+  dlg(`<h3 style="font-size:1.05rem;line-height:1.35">${esc(text)}</h3><div class="acts"><button class="btn danger-solid grow" data-act="dlgok">${esc(okLabel)}</button><button class="btn ghost grow" data-act="dlgclose">ביטול</button></div>`);
+}
+function addDlg(catId){
+  const cat=BYID[catId]; if(!cat) return; S.addCat=catId;
+  dlg(`<div class="shead" style="--c:${cat.c}">${icon(catId)}<div style="flex:1;min-width:0"><h3>הוספה ל${esc(cat.name)}</h3><span class="note">אפשר לכתוב כמות, למשל 2 חלב</span></div></div>
+   <form id="addcatform" class="addbar" style="margin:0"><input id="addcatin" type="text" placeholder="שם המוצר" autocomplete="off" enterkeyhint="done"><button class="btn" type="submit">הוסף</button></form>
+   <div class="acts"><button class="btn ghost grow" data-act="dlgclose">סיום</button></div>`);
+  const inp=$('#addcatin'); if(inp) inp.focus();
+}
+document.addEventListener('submit',e=>{
+  if(!e.target||e.target.id!=='addcatform') return; e.preventDefault();
+  const inp=$('#addcatin'),cid=S.addCat; const rows=splitText(inp.value.replace(/\n/g,', ')); if(!rows.length||!cid) return;
+  rows.forEach(r=>{ addItem(r.name,r.qty,cid); if(guess(r.name)!==cid) learnCat(r.name,cid); });   // בחירה ידנית של קטגוריה נלמדת
+  inp.value=''; toast(rows.length>1?`נוספו ${rows.length} מוצרים`:'נוסף'); inp.focus();
+});
 
 /* ---------- החלקה על פריט: ימינה = מחיקה, שמאלה = כמות (כמו באייפון) ---------- */
 let swp=null;
@@ -495,21 +525,28 @@ document.addEventListener('pointermove',e=>{
   if(!swp.moved){
     if(Math.abs(dy)>10&&Math.abs(dy)>Math.abs(dx)){swp=null;return}      // גלילה אנכית
     if(Math.abs(dx)<8) return;
-    swp.moved=true; S.dragging=true; try{swp.row.setPointerCapture(e.pointerId)}catch(_){}
+    swp.moved=true; S.dragging=true; swp.samples=[]; try{swp.row.setPointerCapture(e.pointerId)}catch(_){}
     swp.row.style.transition='none';
   }
-  swp.off=Math.max(-SW_R,Math.min(SW_L,swp.cur+dx));
+  const raw=swp.cur+dx;                                                   // "גומי": התנגדות מעבר לקצה, כמו באייפון
+  swp.off=raw>SW_L?SW_L+(raw-SW_L)*.35:raw<-SW_R?-SW_R+(raw+SW_R)*.35:raw;
   swp.row.style.transform=`translateX(${swp.off}px)`;
+  const now=performance.now(); swp.samples.push([now,swp.off]); while(swp.samples.length>2&&now-swp.samples[0][0]>100) swp.samples.shift();
 });
 function swEnd(){
   if(!swp) return; const g=swp; swp=null;
   if(!g.moved) return;
   S.dragging=false; S.noClickUntil=Date.now()+350;
-  g.row.style.transition='';
-  const side=g.off>SW_L/2?'l':g.off<-SW_R/2?'r':'';
-  S.sw=side?{id:g.id,side}:null;
-  g.row.style.transform=`translateX(${side==='l'?SW_L:side==='r'?-SW_R:0}px)`;
-  if(S.pendingRender){S.pendingRender=false;render()}
+  let v=0; const sm=g.samples||[];                                        // מהירות ההשלכה (פיקסלים למילישנייה)
+  if(sm.length>1){const f=sm[0],l=sm[sm.length-1]; if(l[0]>f[0]) v=(l[1]-f[1])/(l[0]-f[0]);}
+  const projected=g.off+v*220;                                            // לאן "הזריקה" הייתה מגיעה
+  const anchors=[[-SW_R,'r'],[0,''],[SW_L,'l']];
+  const target=anchors.reduce((best,a)=>Math.abs(a[0]-projected)<Math.abs(best[0]-projected)?a:best);
+  const dist=Math.abs(target[0]-g.off),dur=Math.round(Math.max(220,Math.min(480,dist/(Math.abs(v)+.35)*1.1)));
+  g.row.style.transition=`transform ${dur}ms cubic-bezier(.25,1.12,.5,1)`;   // התיישבות קפיצית קלה
+  g.row.style.transform=`translateX(${target[0]}px)`;
+  S.sw=target[1]?{id:g.id,side:target[1]}:null;
+  if(S.pendingRender){S.pendingRender=false;setTimeout(render,dur+30)}
 }
 document.addEventListener('pointerup',swEnd);
 document.addEventListener('pointercancel',swEnd);
